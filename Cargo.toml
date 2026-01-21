@@ -1,0 +1,6 @@
+[package]
+name = "ow2-tournament-be"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
