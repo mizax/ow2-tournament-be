@@ -29,3 +29,4 @@ async-trait = "0.1.88"
 actix-multipart = "0.7.2"
 ulid = { version = "1.2.1", features = ["serde"] }
 tokio-cron-scheduler = { version = "0.14.0", features = ["signal"] }
+mime_guess = "2.0.4"

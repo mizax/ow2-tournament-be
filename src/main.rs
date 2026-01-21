@@ -1,14 +1,16 @@
 use std::sync::Arc;
-use actix_web::{App, HttpServer};
+use actix_web::{web, App, HttpServer};
 use tokio::try_join;
 use crate::config::Config;
 use crate::dal::dal::Dal;
+use crate::storage::create_storage;
 
 mod config;
 mod dal;
 mod jobs;
 mod api;
 mod error;
+mod storage;
 
 const LOGGER_FORMAT: &'static str = "%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
@@ -38,12 +40,17 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
 
     let db = Arc::new(Dal::new(conf).await);
 
+    let storage = web::Data::new(create_storage(conf.storage.clone()).await.unwrap());
+
     let job_scheduler =
         jobs::init_scheduler(db.clone());
 
     let http_server = HttpServer::new(move || {
         App::new()
             .wrap(actix_web::middleware::Logger::new(LOGGER_FORMAT))
+            .app_data(web::Data::new(config.clone()))
+            .app_data(web::Data::new(db.clone()))
+            .app_data(storage.clone())
             // api routes
             .configure(api::configure)
     })

@@ -1,12 +1,15 @@
 pub use ::config::ConfigError;
 use serde::Deserialize;
 use sqlx::sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode};
+use crate::storage::StorageConfig;
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
     pub server_addr: String,
     pub actix_workers: usize,
     pub sqlite: CustomSqliteConnectOptions,
+    #[serde(default = "default_storage_config")]
+    pub storage: StorageConfig,
 }
 
 impl Config {
@@ -37,5 +40,14 @@ impl TryInto<SqliteConnectOptions> for CustomSqliteConnectOptions {
                 .filename(self.filename)
                 .extension(self.text_extension)
         )
+    }
+}
+
+fn default_storage_config() -> StorageConfig {
+    StorageConfig::FileSystem {
+        root_dir: "./storage".to_string(),
+        shard_levels: None,
+        shard_chars: None,
+        serve_url: None,
     }
 }
