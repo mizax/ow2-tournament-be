@@ -8,6 +8,8 @@ use crate::error::AppError;
 pub enum ApiError {
     #[error("An internal error occurred: {error}")]
     InternalError { error: String },
+    #[error("Bad request: {error}")]
+    BadRequest { error: String, details: String },
 }
 
 
@@ -15,6 +17,7 @@ impl error::ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match *self {
             ApiError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::BadRequest { .. } => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -24,6 +27,12 @@ impl error::ResponseError for ApiError {
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
                         "error": error,
+                    })),
+            ApiError::BadRequest { error, details } => HttpResponse::build(self.status_code())
+                .insert_header(ContentType::json())
+                .json(serde_json::json!({
+                        "error": error,
+                        "details": details,
                     })),
         }
     }

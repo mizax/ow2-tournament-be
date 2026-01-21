@@ -1,4 +1,5 @@
 mod error;
+pub mod auth;
 
 use actix_web::{get, web, HttpResponse, Result, Responder};
 use serde_json::json;
@@ -15,6 +16,7 @@ fn configure_public(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/public/v1")
             .service(stub)
+            .configure(auth::battlenet::configure)
     );
 }
 

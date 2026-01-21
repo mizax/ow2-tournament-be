@@ -4,6 +4,8 @@ use tokio::try_join;
 use crate::config::Config;
 use crate::dal::dal::Dal;
 use crate::storage::create_storage;
+use crate::api::auth::state_store::OAuthStateStore;
+use std::time::Duration;
 
 mod config;
 mod dal;
@@ -42,6 +44,8 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
 
     let storage = web::Data::new(create_storage(conf.storage.clone()).await.unwrap());
 
+    let state_store = web::Data::new(OAuthStateStore::new(Duration::from_secs(600)));
+
     let job_scheduler =
         jobs::init_scheduler(db.clone());
 
@@ -51,6 +55,7 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
             .app_data(web::Data::new(config.clone()))
             .app_data(web::Data::new(db.clone()))
             .app_data(storage.clone())
+            .app_data(state_store.clone())
             // api routes
             .configure(api::configure)
     })

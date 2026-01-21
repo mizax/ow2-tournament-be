@@ -10,6 +10,14 @@ pub struct Config {
     pub sqlite: CustomSqliteConnectOptions,
     #[serde(default = "default_storage_config")]
     pub storage: StorageConfig,
+    pub battlenet: BattleNetConfig,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct BattleNetConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub redirect_uri: String,
 }
 
 impl Config {

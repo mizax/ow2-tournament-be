@@ -1,0 +1,138 @@
+use actix_web::{get, web, HttpResponse, Responder, Result};
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use crate::api::auth::state_store::OAuthStateStore;
+use crate::api::error::ApiError;
+use crate::config::Config;
+
+#[derive(Serialize, Deserialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: u64,
+    pub scope: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id_token: Option<String>,
+}
+
+const BATTLE_NET_AUTH_URL: &str = "https://oauth.battle.net/authorize";
+const BATTLE_NET_TOKEN_URL: &str = "https://oauth.battle.net/token";
+
+#[derive(Deserialize)]
+pub struct AuthRequest {
+    pub region: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct CallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
+}
+
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/auth")
+            .service(battlenet_auth)
+            .service(battlenet_callback)
+    );
+}
+
+#[get("/battlenet")]
+pub async fn battlenet_auth(
+    query: web::Query<AuthRequest>,
+    config: web::Data<Arc<Config>>,
+    state_store: web::Data<OAuthStateStore>,
+) -> Result<impl Responder> {
+    let state: String = rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+
+    state_store.add_state(state.clone());
+
+    let mut params = HashMap::new();
+    params.insert("client_id", config.battlenet.client_id.clone());
+    params.insert("redirect_uri", config.battlenet.redirect_uri.clone());
+    params.insert("response_type", "code".to_string());
+    params.insert("scope", "openid".to_string());
+    params.insert("state", state);
+
+    let base_url = match query.region.as_deref() {
+        Some("cn") => "https://oauth.battlenet.com.cn/authorize",
+        _ => BATTLE_NET_AUTH_URL,
+    };
+
+    let auth_url = format!(
+        "{}?{}",
+        base_url,
+        serde_urlencoded::to_string(&params).map_err(|e| ApiError::InternalError { error: e.to_string() })?
+    );
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "auth_url": auth_url,
+    })))
+}
+
+#[get("/battlenet/callback")]
+pub async fn battlenet_callback(
+    query: web::Query<CallbackQuery>,
+    config: web::Data<Arc<Config>>,
+    state_store: web::Data<OAuthStateStore>,
+) -> Result<impl Responder> {
+    if let Some(error) = &query.error {
+        return Err(ApiError::BadRequest {
+            error: error.clone(),
+            details: query.error_description.clone().unwrap_or_default(),
+        }.into());
+    }
+
+    let state = query.state.as_ref().ok_or_else(|| ApiError::BadRequest {
+        error: "Missing state".to_string(),
+        details: "State parameter is required".to_string(),
+    })?;
+
+    if state_store.verify_and_remove_state(state).is_none() {
+        return Err(ApiError::BadRequest {
+            error: "Invalid state".to_string(),
+            details: "State parameter is invalid or expired".to_string(),
+        }.into());
+    }
+
+    let code = query.code.as_ref().ok_or_else(|| ApiError::BadRequest {
+        error: "Missing code".to_string(),
+        details: "Authorization code is required".to_string(),
+    })?;
+
+    let client = reqwest::Client::new();
+    
+    let token_response = client
+        .post(BATTLE_NET_TOKEN_URL)
+        .basic_auth(&config.battlenet.client_id, Some(&config.battlenet.client_secret))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code),
+            ("redirect_uri", &config.battlenet.redirect_uri),
+        ])
+        .send()
+        .await
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to exchange token: {}", e) })?;
+
+    if !token_response.status().is_success() {
+        let error_text = token_response.text().await.unwrap_or_default();
+        return Err(ApiError::InternalError {
+            error: format!("Token exchange failed: {}", error_text),
+        }.into());
+    }
+
+    let tokens: TokenResponse = token_response
+        .json()
+        .await
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to parse token response: {}", e) })?;
+
+    Ok(HttpResponse::Ok().json(tokens))
+}
