@@ -1,0 +1,41 @@
+pub use ::config::ConfigError;
+use serde::Deserialize;
+use sqlx::sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode};
+
+#[derive(Deserialize, Clone)]
+pub struct Config {
+    pub server_addr: String,
+    pub actix_workers: usize,
+    pub sqlite: CustomSqliteConnectOptions,
+}
+
+impl Config {
+    pub fn from_env() -> Result<Self, ConfigError> {
+        let builder = config::Config::builder()
+            .add_source(config::Environment::default());
+        match builder.build() {
+            Ok(cfg) => cfg.try_deserialize(),
+            Err(e) => Err(e)
+        }
+    }
+}
+
+#[derive(Deserialize, Clone)]
+pub struct CustomSqliteConnectOptions {
+    pub filename: String,
+    pub text_extension: String,
+}
+
+impl TryInto<SqliteConnectOptions> for CustomSqliteConnectOptions {
+    type Error = ();
+
+    fn try_into(self) -> Result<SqliteConnectOptions, Self::Error> {
+        Ok(
+            SqliteConnectOptions::new()
+                .journal_mode(SqliteJournalMode::Wal)
+                .auto_vacuum(SqliteAutoVacuum::Incremental)
+                .filename(self.filename)
+                .extension(self.text_extension)
+        )
+    }
+}
