@@ -1,3 +1,5 @@
+mod error;
+
 use actix_web::{get, web, HttpResponse, Result, Responder};
 use serde_json::json;
 

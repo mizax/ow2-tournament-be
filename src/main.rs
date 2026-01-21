@@ -8,6 +8,7 @@ mod config;
 mod dal;
 mod jobs;
 mod api;
+mod error;
 
 const LOGGER_FORMAT: &'static str = "%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
