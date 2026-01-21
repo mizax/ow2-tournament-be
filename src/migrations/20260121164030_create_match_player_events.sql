@@ -1,10 +1,6 @@
-CREATE TABLE match_player_events (
+CREATE TABLE match_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  match_id INTEGER,
-  round INTEGER,
-  team_id INTEGER,
-  player_id INTEGER,
-  hero_id INTEGER,
+  match_id INTEGER NOT NULL,
   time TIME,
   event TEXT,
   data JSON,
