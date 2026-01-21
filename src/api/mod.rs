@@ -1,5 +1,6 @@
 mod error;
 pub mod auth;
+mod tournaments;
 
 use actix_web::{get, web, HttpResponse, Result, Responder};
 use serde_json::json;
@@ -17,6 +18,7 @@ fn configure_public(cfg: &mut web::ServiceConfig) {
         web::scope("/public/v1")
             .service(stub)
             .configure(auth::battlenet::configure)
+            .configure(tournaments::configure)
     );
 }
 

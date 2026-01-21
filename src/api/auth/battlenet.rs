@@ -17,8 +17,27 @@ pub struct TokenResponse {
     pub id_token: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct BattleNetUserInfo {
+    pub id: u64,
+    pub battletag: String,
+}
+
+#[derive(Serialize)]
+pub struct User {
+    pub id: u64,
+    pub battletag: String,
+}
+
+#[derive(Serialize)]
+pub struct AuthResponse {
+    pub user: User,
+    pub id_token: Option<String>,
+}
+
 const BATTLE_NET_AUTH_URL: &str = "https://oauth.battle.net/authorize";
 const BATTLE_NET_TOKEN_URL: &str = "https://oauth.battle.net/token";
+const BATTLE_NET_USERINFO_URL: &str = "https://oauth.battle.net/userinfo";
 
 #[derive(Deserialize)]
 pub struct AuthRequest {
@@ -134,5 +153,32 @@ pub async fn battlenet_callback(
         .await
         .map_err(|e| ApiError::InternalError { error: format!("Failed to parse token response: {}", e) })?;
 
-    Ok(HttpResponse::Ok().json(tokens))
+    let userinfo_response = client
+        .get(BATTLE_NET_USERINFO_URL)
+        .bearer_auth(&tokens.access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to fetch userinfo: {}", e) })?;
+
+    if !userinfo_response.status().is_success() {
+        let error_text = userinfo_response.text().await.unwrap_or_default();
+        return Err(ApiError::InternalError {
+            error: format!("Userinfo request failed: {}", error_text),
+        }.into());
+    }
+
+    let bnet_user: BattleNetUserInfo = userinfo_response
+        .json()
+        .await
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to parse userinfo response: {}", e) })?;
+
+    let response = AuthResponse {
+        user: User {
+            id: bnet_user.id,
+            battletag: bnet_user.battletag,
+        },
+        id_token: tokens.id_token,
+    };
+
+    Ok(HttpResponse::Ok().json(response))
 }
