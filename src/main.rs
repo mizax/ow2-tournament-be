@@ -7,6 +7,7 @@ use crate::dal::dal::Dal;
 mod config;
 mod dal;
 mod jobs;
+mod api;
 
 const LOGGER_FORMAT: &'static str = "%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
@@ -43,7 +44,7 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
         App::new()
             .wrap(actix_web::middleware::Logger::new(LOGGER_FORMAT))
             // api routes
-            // .configure(api::configure)
+            .configure(api::configure)
     })
         .workers(conf.actix_workers)
         .bind(conf.server_addr.clone())?
