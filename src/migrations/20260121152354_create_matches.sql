@@ -1,6 +1,6 @@
 CREATE TABLE matches (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  tournament_id INTEGER
+  tournament_id INTEGER,
   home_team_id INTEGER,
   away_team_id INTEGER,
   home_score INTEGER,
