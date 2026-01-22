@@ -18,6 +18,7 @@ pub struct BattleNetConfig {
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uri: String,
+    pub jwks_url: String,
 }
 
 impl Config {

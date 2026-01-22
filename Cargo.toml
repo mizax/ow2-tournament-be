@@ -26,7 +26,8 @@ serde_urlencoded = "0.7.1"
 serde_qs = { version = "1.0.0-rc.3", features = ["actix4"] }
 strum = "0.27.1"
 strum_macros = "0.27.1"
-jsonwebtoken = "9.2.0"
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+base64 = "0.22.1"
 chrono = "0.4.31"
 async-trait = "0.1.88"
 actix-multipart = "0.7.2"
