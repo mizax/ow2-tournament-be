@@ -1,1 +1,15 @@
 pub mod dal;
+pub mod matches;
+pub mod teams;
+pub mod players;
+pub mod heroes;
+pub mod match_events;
+pub mod match_player_statistics;
+
+pub use dal::Dal;
+pub use matches::MatchesRepo;
+pub use teams::TeamsRepo;
+pub use players::PlayersRepo;
+pub use heroes::HeroesRepo;
+pub use match_events::MatchEventsRepo;
+pub use match_player_statistics::MatchPlayerStatisticsRepo;

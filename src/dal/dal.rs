@@ -1,12 +1,18 @@
 #[derive(Clone)]
 pub struct Dal {
     pub(crate) db_pool: Pool<Sqlite>,
+    pub matches: MatchesRepo,
+    pub teams: TeamsRepo,
+    pub players: PlayersRepo,
+    pub heroes: HeroesRepo,
+    pub match_events: MatchEventsRepo,
+    pub match_player_statistics: MatchPlayerStatisticsRepo,
 }
 
-use sqlx::{
-    Pool,
-    Sqlite,
-    SqlitePool,
+use sqlx::{Pool, Sqlite, SqlitePool};
+
+use crate::dal::{
+    HeroesRepo, MatchEventsRepo, MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo, TeamsRepo,
 };
 
 impl Dal {
@@ -19,7 +25,13 @@ impl Dal {
             .await
             .expect("db initialization failed");
         Dal {
-            db_pool
+            matches: MatchesRepo::new(db_pool.clone()),
+            teams: TeamsRepo::new(db_pool.clone()),
+            players: PlayersRepo::new(db_pool.clone()),
+            heroes: HeroesRepo::new(db_pool.clone()),
+            match_events: MatchEventsRepo::new(db_pool.clone()),
+            match_player_statistics: MatchPlayerStatisticsRepo::new(db_pool.clone()),
+            db_pool,
         }
     }
 
@@ -30,4 +42,5 @@ impl Dal {
 
         Ok(())
     }
+
 }
