@@ -52,16 +52,8 @@ pub struct CallbackQuery {
     pub error_description: Option<String>,
 }
 
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/auth")
-            .service(battlenet_auth)
-            .service(battlenet_callback)
-    );
-}
-
 #[get("/battlenet")]
-pub async fn battlenet_auth(
+pub async fn auth(
     query: web::Query<AuthRequest>,
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,
@@ -98,7 +90,7 @@ pub async fn battlenet_auth(
 }
 
 #[get("/battlenet/callback")]
-pub async fn battlenet_callback(
+pub async fn callback(
     query: web::Query<CallbackQuery>,
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,

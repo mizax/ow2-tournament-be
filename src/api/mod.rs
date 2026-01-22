@@ -1,9 +1,9 @@
 mod error;
 pub mod auth;
 mod tournaments;
+mod user;
 
-use actix_web::{get, web, HttpResponse, Result, Responder};
-use serde_json::json;
+use actix_web::{web};
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -16,8 +16,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 fn configure_public(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/public/v1")
-            .service(stub)
-            .configure(auth::battlenet::configure)
+            .configure(auth::configure)
             .configure(tournaments::configure)
     );
 }
@@ -25,11 +24,6 @@ fn configure_public(cfg: &mut web::ServiceConfig) {
 fn configure_private(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/secured/v1")
-            .service(stub)
+            .configure(user::configure)
     );
-}
-
-#[get("/")]
-async fn stub() -> Result<impl Responder> {
-    Ok(HttpResponse::Ok().json(json!({})))
 }
