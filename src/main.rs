@@ -5,6 +5,7 @@ use crate::config::Config;
 use crate::dal::dal::Dal;
 use crate::storage::create_storage;
 use crate::api::auth::state_store::OAuthStateStore;
+use crate::api::auth::jwks::BNETJwksService;
 use std::time::Duration;
 
 mod config;
@@ -44,7 +45,8 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
 
     let storage = web::Data::new(create_storage(conf.storage.clone()).await.unwrap());
 
-    let state_store = web::Data::new(OAuthStateStore::new(Duration::from_secs(600)));
+    let state_store = web::Data::new(OAuthStateStore::new(Duration::from_secs(3600)));
+    let jwks_service = web::Data::new(BNETJwksService::new(conf.battlenet.jwks_url.clone(), Duration::from_secs(3600)));
 
     let job_scheduler =
         jobs::init_scheduler(db.clone());
@@ -56,6 +58,7 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
             .app_data(web::Data::new(db.clone()))
             .app_data(storage.clone())
             .app_data(state_store.clone())
+            .app_data(jwks_service.clone())
             // api routes
             .configure(api::configure)
     })
