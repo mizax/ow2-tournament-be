@@ -1,0 +1,18 @@
+CREATE TABLE matches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tournament_id INTEGER,
+  home_team_id INTEGER,
+  away_team_id INTEGER,
+  home_score INTEGER,
+  away_score INTEGER,
+  duration DATETIME_INTERVAL,
+  log_name TEXT,
+
+  created_at DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  modified_at DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  deleted_at DATETIME,
+
+  FOREIGN KEY (home_team_id) REFERENCES teams(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  FOREIGN KEY (away_team_id) REFERENCES teams(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE NO ACTION ON UPDATE NO ACTION
+);

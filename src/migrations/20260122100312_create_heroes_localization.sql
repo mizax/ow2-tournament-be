@@ -1,0 +1,9 @@
+CREATE TABLE heroes_localization (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hero_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  lang TEXT NOT NULL,
+
+  FOREIGN KEY (hero_id) REFERENCES heroes(id) ON DELETE CASCADE ON UPDATE NO ACTION,
+  UNIQUE (hero_id, lang)
+);

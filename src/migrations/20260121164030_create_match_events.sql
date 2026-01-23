@@ -1,0 +1,9 @@
+CREATE TABLE match_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id INTEGER NOT NULL,
+  time TIME,
+  event TEXT,
+  data JSON,
+
+  FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE NO ACTION ON UPDATE NO ACTION
+);
