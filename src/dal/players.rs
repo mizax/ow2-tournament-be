@@ -10,22 +10,24 @@ impl PlayersRepo {
         Self { pool }
     }
 
-    pub async fn find_id_by_username(&self, username: &str) -> Result<Option<i64>, sqlx::Error> {
+    pub async fn find_id_by_team_and_nickname(&self, team_id: i64, nickname: &str) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
-            r#"SELECT id FROM players WHERE username = ?1"#,
+            r#"SELECT id FROM players WHERE team_id = ?1 AND nickname = ?2"#,
         )
-        .bind(username)
+        .bind(team_id)
+        .bind(nickname)
         .fetch_optional(&self.pool)
         .await
     }
 
-    pub async fn create(&self, username: &str) -> Result<i64, sqlx::Error> {
+    pub async fn create(&self, team_id: i64, nickname: &str) -> Result<i64, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
-            r#"INSERT INTO players (username) VALUES (?1)"#,
+            r#"INSERT INTO players (team_id, nickname) VALUES (?1, ?2)"#,
         )
-        .bind(username)
+        .bind(team_id)
+        .bind(nickname)
         .execute(&mut *tx)
         .await?;
 

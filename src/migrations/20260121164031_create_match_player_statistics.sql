@@ -2,7 +2,6 @@ CREATE TABLE match_player_statistics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   match_id INTEGER,
   round INTEGER,
-  team_id INTEGER,
   player_id INTEGER,
   hero_id INTEGER,
 
@@ -39,8 +38,8 @@ CREATE TABLE match_player_statistics (
   weapon_accuracy INTEGER,
   hero_time_played FLOAT,
 
-  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
   FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
-  FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE NO ACTION ON UPDATE NO ACTION
-  FOREIGN KEY (hero_id) REFERENCES heroes(id) ON DELETE NO ACTION ON UPDATE NO ACTION
+  FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  FOREIGN KEY (hero_id) REFERENCES heroes(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  UNIQUE (match_id, round, player_id, hero_id)
 );

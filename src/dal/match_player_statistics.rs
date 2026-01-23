@@ -14,7 +14,6 @@ impl MatchPlayerStatisticsRepo {
         &self,
         match_id: i64,
         round: i64,
-        team_id: i64,
         player_id: i64,
         hero_id: i64,
         stats: &[String],
@@ -22,7 +21,7 @@ impl MatchPlayerStatisticsRepo {
         sqlx::query(
             r#"
             INSERT INTO match_player_statistics (
-              match_id, round, team_id, player_id, hero_id,
+              match_id, round, player_id, hero_id,
               eliminations, final_blows, deaths, all_damage, barrier_damage, hero_damage,
               healing_dealt, healing_received, self_healing, damage_taken,
               defensive_assists, offensive_assists, ultimates_earned, ultimates_used,
@@ -40,13 +39,12 @@ impl MatchPlayerStatisticsRepo {
               ?24, ?25, ?26, ?27,
               ?28, ?29, ?30,
               ?31, ?32, ?33, ?34, ?35,
-              ?36, ?37
+              ?36
             )
             "#,
         )
         .bind(match_id)
         .bind(round)
-        .bind(team_id)
         .bind(player_id)
         .bind(hero_id)
         .bind(get_i64(stats, 0))

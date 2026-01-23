@@ -1,7 +1,11 @@
 CREATE TABLE teams (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tournament_id INTEGER,
   name TEXT NOT NULL,
   created_at DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   modified_at DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-  deleted_at DATETIME
+  deleted_at DATETIME,
+
+  FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  UNIQUE (tournament_id, name)
 );
