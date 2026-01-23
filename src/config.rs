@@ -8,6 +8,7 @@ pub struct Config {
     pub server_addr: String,
     pub actix_workers: usize,
     pub sqlite: CustomSqliteConnectOptions,
+    pub app: App,
     #[serde(default = "default_storage_config")]
     pub storage: StorageConfig,
     pub battlenet: BattleNetConfig,
@@ -19,6 +20,12 @@ pub struct BattleNetConfig {
     pub client_secret: String,
     pub redirect_uri: String,
     pub jwks_url: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct App {
+    pub main_host: String,
+    pub alt_host: String,
 }
 
 impl Config {

@@ -54,6 +54,7 @@ pub struct CallbackQuery {
 
 #[get("/battlenet")]
 pub async fn auth(
+    req: actix_web::HttpRequest,
     query: web::Query<AuthRequest>,
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,
@@ -66,9 +67,23 @@ pub async fn auth(
 
     state_store.add_state(state.clone());
 
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    let base_redirect_host = if host == config.app.alt_host.replace("http://", "").replace("https://", "") {
+        &config.app.alt_host
+    } else {
+        &config.app.main_host
+    };
+
+    let redirect_uri = format!("{}{}", base_redirect_host, config.battlenet.redirect_uri);
+
     let mut params = HashMap::new();
     params.insert("client_id", config.battlenet.client_id.clone());
-    params.insert("redirect_uri", config.battlenet.redirect_uri.clone());
+    params.insert("redirect_uri", redirect_uri);
     params.insert("response_type", "code".to_string());
     params.insert("scope", "openid".to_string());
     params.insert("state", state);
@@ -91,6 +106,7 @@ pub async fn auth(
 
 #[get("/battlenet/callback")]
 pub async fn callback(
+    req: actix_web::HttpRequest,
     query: web::Query<CallbackQuery>,
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,
@@ -119,6 +135,20 @@ pub async fn callback(
         details: "Authorization code is required".to_string(),
     })?;
 
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    let base_redirect_host = if host == config.app.alt_host.replace("http://", "").replace("https://", "") {
+        &config.app.alt_host
+    } else {
+        &config.app.main_host
+    };
+
+    let redirect_uri = format!("{}{}", base_redirect_host, config.battlenet.redirect_uri);
+
     let client = reqwest::Client::new();
     
     let token_response = client
@@ -127,7 +157,7 @@ pub async fn callback(
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code),
-            ("redirect_uri", &config.battlenet.redirect_uri),
+            ("redirect_uri", &redirect_uri),
         ])
         .send()
         .await
