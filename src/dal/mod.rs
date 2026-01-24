@@ -7,6 +7,7 @@ pub mod match_events;
 pub mod match_player_statistics;
 pub mod users;
 pub mod repository;
+pub mod registrations;
 
 pub use dal::Dal;
 pub use matches::MatchesRepo;
@@ -24,3 +25,8 @@ pub use repository::TournamentsRepo;
 pub use repository::TournamentShortData;
 pub use repository::TournamentDetailsData;
 pub use repository::TournamentsRepoError;
+pub use registrations::RegistrationsRepo;
+pub use registrations::RegistrationRow;
+pub use registrations::NewRegistration;
+pub use registrations::RegistrationStatus;
+pub use registrations::RoleValue;

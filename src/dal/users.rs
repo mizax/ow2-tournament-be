@@ -88,6 +88,40 @@ impl UsersRepo {
         Ok(())
     }
 
+    pub async fn upsert_battletag(&self, user_id: i64, battletag: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO user_battletags (user_id, battletag)
+            VALUES (?1, ?2)
+            "#,
+        )
+        .bind(user_id)
+        .bind(battletag)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn find_battletag_id(
+        &self,
+        user_id: i64,
+        battletag: &str,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT id
+            FROM user_battletags
+            WHERE user_id = ?1 AND battletag = ?2
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(battletag)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
     pub async fn touch_updated_at(&self, user_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1"#,
