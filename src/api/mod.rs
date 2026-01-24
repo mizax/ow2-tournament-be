@@ -2,6 +2,7 @@ mod error;
 pub mod auth;
 mod tournaments;
 mod user;
+mod logs;
 
 use actix_web::{web};
 
@@ -25,5 +26,6 @@ fn configure_private(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/secured/v1")
             .configure(user::configure)
+            .configure(logs::configure)
     );
 }

@@ -8,7 +8,9 @@ pub mod match_player_statistics;
 
 pub use dal::Dal;
 pub use matches::MatchesRepo;
+pub use matches::MatchRow;
 pub use teams::TeamsRepo;
+pub use teams::TeamRow;
 pub use players::PlayersRepo;
 pub use heroes::HeroesRepo;
 pub use match_events::MatchEventsRepo;
