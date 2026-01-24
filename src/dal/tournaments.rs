@@ -141,6 +141,46 @@ impl TournamentsRepo {
             config,
         }))
     }
+
+    pub async fn get_by_id(
+        &self,
+        id: i64,
+    ) -> Result<Option<TournamentDetailsData>, TournamentsRepoError> {
+        let row = sqlx::query_as::<_, TournamentConfigRow>(
+            r#"
+            SELECT
+                t.id,
+                t.title,
+                t.sef_title,
+                t.discipline,
+                t.format,
+                tc.configuration_json
+            FROM tournaments t
+            INNER JOIN tournament_configuration tc
+                ON tc.tournament_id = t.id
+            WHERE t.id = ?1
+            LIMIT 1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let config: TournamentConfig = serde_json::from_str(&row.configuration_json)?;
+
+        Ok(Some(TournamentDetailsData {
+            id: row.id,
+            title: row.title,
+            sef_title: row.sef_title,
+            discipline: row.discipline,
+            format: row.format,
+            config,
+        }))
+    }
 }
 
 fn format_prize_pool(amount: f64, currency: &str) -> Option<String> {

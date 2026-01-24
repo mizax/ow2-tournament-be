@@ -1,6 +1,7 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
+use std::error::Error as StdError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "TEXT")]
@@ -52,6 +53,23 @@ pub struct RegistrationRow {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub version: i64,
+}
+
+#[derive(Debug)]
+pub struct RegistrationDetails {
+    pub tournament_id: i64,
+    pub battletag_id: i64,
+    pub alt_accounts: Option<Vec<String>>,
+    pub twitch: String,
+    pub discord: String,
+    pub primary_role: Option<RoleValue>,
+    pub secondary_role: Option<RoleValue>,
+    pub guarantors: Option<Vec<String>>,
+    pub additional_info: String,
+    pub status: RegistrationStatus,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub decline_reason: Option<String>,
 }
 
 pub struct NewRegistration {
@@ -112,6 +130,65 @@ impl RegistrationsRepo {
             .bind(user_id)
             .fetch_optional(&self.pool)
             .await
+    }
+
+    pub async fn find_by_id_for_user(&self, registration_id: i64, user_id: i64) -> Result<Option<RegistrationDetails>, sqlx::Error> {
+        let row = sqlx::query_as::<_, RegistrationRow>(
+            r#"
+            SELECT
+                id,
+                tournament_id,
+                user_id,
+                user_battletag_id,
+                status,
+                alt_accounts_json,
+                twitch,
+                discord,
+                primary_role,
+                secondary_role,
+                guarantors_json,
+                additional_info,
+                rules_accepted,
+                ip_address,
+                user_agent,
+                decline_reason,
+                created_at,
+                updated_at,
+                version
+            FROM registrations
+            WHERE id = ?1
+              AND user_id = ?2
+              AND status != ?3
+            LIMIT 1
+            "#)
+            .bind(registration_id)
+            .bind(user_id)
+            .bind(RegistrationStatus::Deleted)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let alt_accounts = parse_optional_list(&row.alt_accounts_json)?;
+        let guarantors = parse_optional_list(&row.guarantors_json)?;
+
+        Ok(Some(RegistrationDetails {
+            tournament_id: row.tournament_id,
+            battletag_id: row.user_battletag_id,
+            alt_accounts,
+            twitch: row.twitch,
+            discord: row.discord,
+            primary_role: row.primary_role,
+            secondary_role: row.secondary_role,
+            guarantors,
+            additional_info: row.additional_info,
+            status: row.status,
+            created_at: DateTime::from_naive_utc_and_offset(row.created_at, Utc),
+            updated_at: DateTime::from_naive_utc_and_offset(row.updated_at, Utc),
+            decline_reason: row.decline_reason,
+        }))
     }
 
     pub async fn active_registration_exists(
@@ -227,5 +304,16 @@ impl RegistrationsRepo {
             .bind(RegistrationStatus::Accepted)
             .fetch_all(&self.pool)
             .await
+    }
+}
+
+fn parse_optional_list(payload: &str) -> Result<Option<Vec<String>>, sqlx::Error> {
+    let items: Vec<String> = serde_json::from_str(payload).map_err(|e| {
+        sqlx::Error::Decode(Box::new(e) as Box<dyn StdError + Send + Sync>)
+    })?;
+    if items.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(items))
     }
 }

@@ -121,6 +121,23 @@ impl UsersRepo {
         .fetch_optional(&self.pool)
         .await
     }
+    
+    pub async fn find_battletag_by_id(&self, user_battletag_id: i64) -> Result<Option<UserBattletag>, sqlx::Error> {
+        sqlx::query_as::<_, UserBattletag>(
+            r#"
+            SELECT
+                id,
+                user_id,
+                battletag,
+                created_at
+            FROM user_battletags
+            WHERE id = ?1
+            LIMIT 1
+        "#)
+            .bind(user_battletag_id)
+            .fetch_optional(&self.pool)
+            .await
+    }
 
     pub async fn touch_updated_at(&self, user_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(

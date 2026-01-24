@@ -3,6 +3,7 @@ pub mod auth;
 mod tournaments;
 mod user;
 mod logs;
+mod registrations;
 
 use actix_web::{web};
 
@@ -28,5 +29,6 @@ fn configure_private(cfg: &mut web::ServiceConfig) {
             .configure(user::configure)
             .configure(logs::configure)
             .configure(tournaments::configure_private)
+            .configure(registrations::configure)
     );
 }

@@ -2,7 +2,6 @@ use actix_web::{HttpRequest, HttpResponse, Responder, post, web, get};
 use actix_web::http::header::USER_AGENT;
 use serde::Deserialize;
 use std::sync::Arc;
-use serde_json::json;
 use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
 use crate::dal::{Dal, NewRegistration, RegistrationStatus, RoleValue};
