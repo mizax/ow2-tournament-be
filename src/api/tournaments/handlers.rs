@@ -30,27 +30,19 @@ pub async fn get_tournaments(
     Ok(HttpResponse::Ok().json(json!(tournaments)))
 }
 
-#[get("/{id}")]
+#[get("/{sef_uri}")]
 pub async fn get_tournament(
     db: web::Data<Arc<Dal>>,
-    id: web::Path<String>,
+    sef_uri: web::Path<String>,
 ) -> actix_web::Result<impl Responder, ApiError> {
-    let id = id.into_inner();
+    let sef_uri = sef_uri.into_inner();
     
-    // Basic path traversal protection
-    if id.contains("..") || id.contains('/') || id.contains('\\') {
-        return Err(ApiError::BadRequest {
-            error: "Invalid ID".to_string(),
-            details: "ID contains invalid characters".to_string(),
-        });
-    }
-
     let row = db
         .tournaments
-        .get_by_sef_title(&id)
+        .get_by_sef_title(&sef_uri)
         .await
         .map_err(|e| {
-            log::error!("Failed to load tournament {}: {}", id, e);
+            log::error!("Failed to load tournament {}: {}", sef_uri, e);
             ApiError::InternalError { error: e.to_string() }
         })?
         .ok_or(ApiError::NotFound)?;
