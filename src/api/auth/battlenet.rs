@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::api::auth::state_store::OAuthStateStore;
 use crate::api::error::ApiError;
 use crate::config::Config;
+use crate::dal::Dal;
 
 #[derive(Serialize, Deserialize)]
 pub struct TokenResponse {
@@ -110,6 +111,7 @@ pub async fn callback(
     query: web::Query<CallbackQuery>,
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,
+    db: web::Data<Arc<Dal>>,
 ) -> Result<impl Responder> {
     if let Some(error) = &query.error {
         return Err(ApiError::BadRequest {
@@ -193,6 +195,43 @@ pub async fn callback(
         .json()
         .await
         .map_err(|e| ApiError::InternalError { error: format!("Failed to parse userinfo response: {}", e) })?;
+
+    let user_id = i64::try_from(bnet_user.id)
+        .map_err(|_| ApiError::InternalError { error: "Battle.net user id out of range".to_string() })?;
+
+    let existing_user = db.users
+        .find_by_id(user_id)
+        .await
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to fetch user: {}", e) })?;
+
+    if existing_user.is_none() {
+        db.users
+            .create_user(user_id)
+            .await
+            .map_err(|e| ApiError::InternalError { error: format!("Failed to create user: {}", e) })?;
+
+        db.users
+            .insert_battletag(user_id, &bnet_user.battletag)
+            .await
+            .map_err(|e| ApiError::InternalError { error: format!("Failed to insert battletag: {}", e) })?;
+    } else {
+        let battletag_exists = db.users
+            .battletag_exists(user_id, &bnet_user.battletag)
+            .await
+            .map_err(|e| ApiError::InternalError { error: format!("Failed to check battletag: {}", e) })?;
+
+        if !battletag_exists {
+            db.users
+                .insert_battletag(user_id, &bnet_user.battletag)
+                .await
+                .map_err(|e| ApiError::InternalError { error: format!("Failed to insert battletag: {}", e) })?;
+
+            db.users
+                .touch_updated_at(user_id)
+                .await
+                .map_err(|e| ApiError::InternalError { error: format!("Failed to update user timestamp: {}", e) })?;
+        }
+    }
 
     let response = AuthResponse {
         user: User {

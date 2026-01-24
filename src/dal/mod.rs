@@ -5,6 +5,7 @@ pub mod players;
 pub mod heroes;
 pub mod match_events;
 pub mod match_player_statistics;
+pub mod users;
 
 pub use dal::Dal;
 pub use matches::MatchesRepo;
@@ -15,3 +16,6 @@ pub use players::PlayersRepo;
 pub use heroes::HeroesRepo;
 pub use match_events::MatchEventsRepo;
 pub use match_player_statistics::MatchPlayerStatisticsRepo;
+pub use users::UsersRepo;
+pub use users::User;
+pub use users::UserBattletag;
