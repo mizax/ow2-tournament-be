@@ -6,6 +6,7 @@ pub mod heroes;
 pub mod match_events;
 pub mod match_player_statistics;
 pub mod users;
+pub mod repository;
 
 pub use dal::Dal;
 pub use matches::MatchesRepo;
@@ -19,3 +20,7 @@ pub use match_player_statistics::MatchPlayerStatisticsRepo;
 pub use users::UsersRepo;
 pub use users::User;
 pub use users::UserBattletag;
+pub use repository::TournamentsRepo;
+pub use repository::TournamentShortData;
+pub use repository::TournamentDetailsData;
+pub use repository::TournamentsRepoError;

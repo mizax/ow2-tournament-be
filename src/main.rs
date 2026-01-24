@@ -15,6 +15,7 @@ mod api;
 mod error;
 mod storage;
 mod logs_parser;
+mod shared_models;
 
 const LOGGER_FORMAT: &'static str = "%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
