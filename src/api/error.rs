@@ -42,6 +42,7 @@ impl error::ResponseError for ApiError {
             ApiError::ValidationError { errors } => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
+                        "error": "validation_error",
                         "errors": errors,
                     })),
             ApiError::NotFound => HttpResponse::build(self.status_code())

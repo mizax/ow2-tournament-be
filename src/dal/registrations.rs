@@ -77,6 +77,43 @@ impl RegistrationsRepo {
         Self { pool }
     }
 
+    pub async fn find_user_registration(&self, user_id: i64, tournament_id: i64) -> Result<Option<RegistrationRow>, sqlx::Error> {
+        sqlx::query_as::<_, RegistrationRow>(
+            r#"
+            SELECT
+                id,
+                tournament_id,
+                user_id,
+                user_battletag_id,
+                status,
+                alt_accounts_json,
+                twitch,
+                discord,
+                primary_role,
+                secondary_role,
+                guarantors_json,
+                additional_info,
+                rules_accepted,
+                ip_address,
+                user_agent,
+                decline_reason,
+                created_at,
+                updated_at,
+                version
+            FROM registrations
+            WHERE tournament_id = ?1
+              AND status != ?2
+              AND user_id = ?3
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#)
+            .bind(tournament_id)
+            .bind(RegistrationStatus::Deleted)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
     pub async fn active_registration_exists(
         &self,
         tournament_id: i64,
@@ -92,12 +129,12 @@ impl RegistrationsRepo {
             LIMIT 1
             "#,
         )
-        .bind(tournament_id)
-        .bind(user_id)
-        .bind(RegistrationStatus::Deleted)
-        .fetch_optional(&self.pool)
-        .await?
-        .is_some();
+            .bind(tournament_id)
+            .bind(user_id)
+            .bind(RegistrationStatus::Deleted)
+            .fetch_optional(&self.pool)
+            .await?
+            .is_some();
 
         Ok(exists)
     }
@@ -133,23 +170,23 @@ impl RegistrationsRepo {
             )
             "#,
         )
-        .bind(registration.tournament_id)
-        .bind(registration.user_id)
-        .bind(registration.user_battletag_id)
-        .bind(registration.status)
-        .bind(registration.alt_accounts_json)
-        .bind(registration.twitch)
-        .bind(registration.discord)
-        .bind(registration.primary_role)
-        .bind(registration.secondary_role)
-        .bind(registration.guarantors_json)
-        .bind(registration.additional_info)
-        .bind(registration.rules_accepted)
-        .bind(registration.ip_address)
-        .bind(registration.user_agent)
-        .bind(registration.decline_reason)
-        .execute(&self.pool)
-        .await?;
+            .bind(registration.tournament_id)
+            .bind(registration.user_id)
+            .bind(registration.user_battletag_id)
+            .bind(registration.status)
+            .bind(registration.alt_accounts_json)
+            .bind(registration.twitch)
+            .bind(registration.discord)
+            .bind(registration.primary_role)
+            .bind(registration.secondary_role)
+            .bind(registration.guarantors_json)
+            .bind(registration.additional_info)
+            .bind(registration.rules_accepted)
+            .bind(registration.ip_address)
+            .bind(registration.user_agent)
+            .bind(registration.decline_reason)
+            .execute(&self.pool)
+            .await?;
 
         Ok(result.last_insert_rowid())
     }
@@ -186,9 +223,9 @@ impl RegistrationsRepo {
             ORDER BY id
             "#,
         )
-        .bind(tournament_id)
-        .bind(RegistrationStatus::Accepted)
-        .fetch_all(&self.pool)
-        .await
+            .bind(tournament_id)
+            .bind(RegistrationStatus::Accepted)
+            .fetch_all(&self.pool)
+            .await
     }
 }
