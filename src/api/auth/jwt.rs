@@ -100,6 +100,17 @@ impl FromRequest for AuthenticatedUser {
                 roles.push(UserRole::Admin);
             }
 
+            let is_manager = db.tournament_managers
+                .user_is_manager(user_id)
+                .await
+                .map_err(|e| {
+                    error!("Failed to check tournament manager status for user {}: {:?}", user_id, e);
+                    ErrorUnauthorized("Invalid user")
+                })?;
+            if is_manager {
+                roles.push(UserRole::TournamentManager);
+            }
+
             Ok(AuthenticatedUser {
                 id: claims.sub,
                 battletag: claims.battle_tag,

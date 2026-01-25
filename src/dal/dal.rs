@@ -10,13 +10,14 @@ pub struct Dal {
     pub users: UsersRepo,
     pub tournaments: TournamentsRepo,
     pub registrations: RegistrationsRepo,
+    pub tournament_managers: TournamentManagersRepo,
 }
 
 use sqlx::{Pool, Sqlite, SqlitePool};
 
 use crate::dal::{
     HeroesRepo, MatchEventsRepo, MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo, TeamsRepo,
-    UsersRepo, TournamentsRepo, RegistrationsRepo,
+    UsersRepo, TournamentsRepo, RegistrationsRepo, TournamentManagersRepo,
 };
 
 impl Dal {
@@ -38,6 +39,7 @@ impl Dal {
             users: UsersRepo::new(db_pool.clone()),
             tournaments: TournamentsRepo::new(db_pool.clone()),
             registrations: RegistrationsRepo::new(db_pool.clone()),
+            tournament_managers: TournamentManagersRepo::new(db_pool.clone()),
             db_pool,
         }
     }
