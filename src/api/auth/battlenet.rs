@@ -3,6 +3,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::api::auth::jwt::UserRole;
 use crate::api::auth::state_store::OAuthStateStore;
 use crate::api::error::ApiError;
 use crate::config::Config;
@@ -28,6 +29,7 @@ pub struct BattleNetUserInfo {
 pub struct User {
     pub id: u64,
     pub battletag: String,
+    pub roles: Vec<UserRole>,
 }
 
 #[derive(Serialize)]
@@ -233,10 +235,24 @@ pub async fn callback(
         }
     }
 
+    let mut roles = vec![UserRole::NormalUser];
+    if existing_user.as_ref().map(|user| user.is_admin).unwrap_or(false) {
+        roles.push(UserRole::Admin);
+    }
+
+    let is_manager = db.tournament_managers
+        .user_is_manager(user_id)
+        .await
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to check tournament manager status for user {}: {}", user_id, e) })?;
+    if is_manager {
+        roles.push(UserRole::TournamentManager);
+    }
+
     let response = AuthResponse {
         user: User {
             id: bnet_user.id,
             battletag: bnet_user.battletag,
+            roles,
         },
         id_token: tokens.id_token,
     };
