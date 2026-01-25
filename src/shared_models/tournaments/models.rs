@@ -18,6 +18,7 @@ pub struct Rules {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Subscription {
     pub twitch_channel: Option<String>,
+    pub donation_url: Option<String>,
     pub donation_amount_rub: Option<f64>,
 }
 
@@ -36,10 +37,12 @@ pub struct Checkin {
     pub from: Option<String>,
     pub to: Option<String>,
     pub platform: Option<String>,
+    pub platform_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Registration {
+    pub start: Option<DateTime<Utc>>,
     pub deadline: Option<DateTime<Utc>>,
     pub checkin: Option<Checkin>,
 }
