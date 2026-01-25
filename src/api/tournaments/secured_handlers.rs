@@ -1,5 +1,6 @@
 use actix_web::{HttpRequest, HttpResponse, Responder, post, web, get};
 use actix_web::http::header::USER_AGENT;
+use chrono::Utc;
 use serde::Deserialize;
 use std::sync::Arc;
 use crate::api::auth::jwt::AuthenticatedUser;
@@ -86,6 +87,17 @@ pub async fn register(
             ApiError::InternalError { error: e.to_string() }
         })?
         .ok_or(ApiError::NotFound)?;
+
+    if let Some(registration) = tournament.config.registration.as_ref() {
+        if let Some(start) = registration.start.as_ref() {
+            if Utc::now() < *start {
+                return Err(ApiError::BadRequest {
+                    error: "registration_not_started".to_string(),
+                    details: "Registration has not started yet.".to_string(),
+                });
+            }
+        }
+    }
 
     let ip_address = req
         .connection_info()
