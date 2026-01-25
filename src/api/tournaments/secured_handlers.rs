@@ -215,9 +215,9 @@ pub async fn registration_status(
         details: "User id from auth token is not a number.".to_string(),
     })?;
 
-    let tournament = db
+    let tournament_id = db
         .tournaments
-        .get_by_sef_title(&sef_uri)
+        .get_id_by_sef_title(&sef_uri)
         .await
         .map_err(|e| {
             log::error!("Failed to load tournament {}: {}", sef_uri, e);
@@ -227,10 +227,10 @@ pub async fn registration_status(
 
     let request = db
         .registrations
-        .find_user_registration(user_id, tournament.id)
+        .find_user_registration(user_id, tournament_id)
         .await
         .map_err(|e| {
-            log::error!("Failed to load registration for user {} in tournament {}: {}", user_id, tournament.id, e);
+            log::error!("Failed to load registration for user {} in tournament {}: {}", user_id, tournament_id, e);
             ApiError::InternalError { error: e.to_string() }
         })?;
 

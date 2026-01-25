@@ -1,5 +1,5 @@
 use serde_json;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Error, Pool, Sqlite};
 use thiserror::Error as ThisError;
 
 use crate::shared_models::tournaments::models::TournamentConfig;
@@ -100,6 +100,17 @@ impl TournamentsRepo {
         }
 
         Ok(tournaments)
+    }
+
+    pub async fn get_id_by_sef_title(&self, sef_title: &str) -> Result<Option<i64>, Error> {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT id FROM tournaments WHERE sef_title = ?1 LIMIT 1
+            "#,
+        )
+            .bind(sef_title)
+            .fetch_optional(&self.pool)
+            .await
     }
 
     pub async fn get_by_sef_title(
