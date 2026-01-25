@@ -106,6 +106,22 @@ pub async fn get_registration(
     let twitch_channel = subscription.and_then(|value| value.twitch_channel.clone());
     let donation_amount_rub = subscription.and_then(|value| value.donation_amount_rub);
 
+    let manager_comment = if registration.status == RegistrationStatus::ActionRequired {
+        db.registrations
+            .get_latest_pending_action_comment(registration_id)
+            .await
+            .map_err(|e| {
+                log::error!(
+                    "Failed to load pending action comment for registration {}: {}",
+                    registration_id,
+                    e
+                );
+                ApiError::InternalError { error: e.to_string() }
+            })?
+    } else {
+        None
+    };
+
     Ok(HttpResponse::Ok().json(RegistrationDetailsResponse {
         tournament_title: tournament.title,
         tournament_sef: tournament.sef_title,
@@ -120,7 +136,7 @@ pub async fn get_registration(
         status: registration.status,
         created_at: registration.created_at,
         updated_at: registration.updated_at,
-        manager_comment: None,
+        manager_comment,
         decline_reason: registration.decline_reason,
         verification_battletag,
         twitch_channel,

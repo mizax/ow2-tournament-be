@@ -12,6 +12,8 @@ pub enum ApiError {
     BadRequest { error: String, details: String },
     #[error("Validation error")]
     ValidationError { errors: Vec<String> },
+    #[error("Forbidden")]
+    Forbidden,
     #[error("Not found")]
     NotFound,
 }
@@ -22,6 +24,7 @@ impl error::ResponseError for ApiError {
             ApiError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::BadRequest { .. } => StatusCode::BAD_REQUEST,
             ApiError::ValidationError { .. } => StatusCode::BAD_REQUEST,
+            ApiError::Forbidden => StatusCode::FORBIDDEN,
             ApiError::NotFound => StatusCode::NOT_FOUND,
         }
     }
@@ -44,6 +47,11 @@ impl error::ResponseError for ApiError {
                 .json(serde_json::json!({
                         "error": "validation_error",
                         "errors": errors,
+                    })),
+            ApiError::Forbidden => HttpResponse::build(self.status_code())
+                .insert_header(ContentType::json())
+                .json(serde_json::json!({
+                        "error": "forbidden",
                     })),
             ApiError::NotFound => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())

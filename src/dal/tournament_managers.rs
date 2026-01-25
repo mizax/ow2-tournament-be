@@ -1,8 +1,18 @@
+use chrono::NaiveDateTime;
 use sqlx::{Pool, Sqlite};
 
 #[derive(Clone)]
 pub struct TournamentManagersRepo {
     pool: Pool<Sqlite>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct ManagedTournamentRow {
+    pub id: i64,
+    pub title: String,
+    pub sef_title: String,
+    pub started_at: Option<NaiveDateTime>,
+    pub registration_count: i64,
 }
 
 impl TournamentManagersRepo {
@@ -25,5 +35,82 @@ impl TournamentManagersRepo {
         .is_some();
 
         Ok(exists)
+    }
+
+    pub async fn user_is_manager_for_tournament(
+        &self,
+        tournament_id: i64,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error> {
+        let exists = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT 1
+            FROM tournament_managers
+            WHERE tournament_id = ?1
+              AND user_id = ?2
+            LIMIT 1
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .is_some();
+
+        Ok(exists)
+    }
+
+    pub async fn user_is_manager_for_registration(
+        &self,
+        registration_id: i64,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error> {
+        let exists = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT 1
+            FROM registrations r
+            INNER JOIN tournament_managers tm
+                ON tm.tournament_id = r.tournament_id
+            WHERE r.id = ?1
+              AND tm.user_id = ?2
+            LIMIT 1
+            "#,
+        )
+        .bind(registration_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .is_some();
+
+        Ok(exists)
+    }
+
+    pub async fn list_managed_tournaments(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<ManagedTournamentRow>, sqlx::Error> {
+        sqlx::query_as::<_, ManagedTournamentRow>(
+            r#"
+            SELECT
+                t.id,
+                t.title,
+                t.sef_title,
+                t.started_at,
+                COUNT(r.id) AS registration_count
+            FROM tournaments t
+            INNER JOIN tournament_managers tm
+                ON tm.tournament_id = t.id
+            LEFT JOIN registrations r
+                ON r.tournament_id = t.id
+               AND r.status != 'DELETED'
+            WHERE tm.user_id = ?1
+              AND t.deleted_at IS NULL
+            GROUP BY t.id, t.title, t.sef_title, t.started_at
+            ORDER BY t.id
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
     }
 }
