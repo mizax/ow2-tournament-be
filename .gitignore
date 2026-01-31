@@ -2,5 +2,5 @@
 .idea/**
 /storage/**
 .env
-db.sqlite
+db.sqlite*
 /examples/**
