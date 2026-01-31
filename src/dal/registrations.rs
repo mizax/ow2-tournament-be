@@ -463,8 +463,6 @@ impl RegistrationsRepo {
             "#,
         );
         builder.push_bind(tournament_id);
-        builder.push(" AND r.status != ");
-        builder.push_bind(RegistrationStatus::Deleted);
 
         if let Some(statuses) = statuses {
             if !statuses.is_empty() {
@@ -523,12 +521,10 @@ impl RegistrationsRepo {
             INNER JOIN user_battletags ub
                 ON ub.id = r.user_battletag_id
             WHERE r.id = ?1
-              AND r.status != ?2
             LIMIT 1
             "#,
         )
         .bind(registration_id)
-        .bind(RegistrationStatus::Deleted)
         .fetch_optional(&self.pool)
         .await?;
 
