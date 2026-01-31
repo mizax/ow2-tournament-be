@@ -7,8 +7,7 @@ use std::sync::Arc;
 use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
 use crate::dal::{
-    Dal, RegistrationComment, RegistrationRequestedAction, RegistrationRoleRanking,
-    RegistrationRow, RegistrationSortField, RegistrationStatus, RoleValue, SortDirection,
+    Dal, RegistrationComment, RegistrationRequestedAction, RegistrationRoleRanking, RegistrationRow, RegistrationSortField, RegistrationStatus, RegistrationSummary, RoleValue, SortDirection
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +42,14 @@ pub struct RegistrationDetailResponse {
     pub role_rankings: Vec<RegistrationRoleRanking>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct RegistrationListResponse {
+    pub items: Vec<RegistrationSummary>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateCommentRequest {
     pub comment: String,
@@ -73,6 +80,7 @@ struct RegistrationListQuery {
     pub sort: Option<String>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
+    pub battletag: Option<String>,
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
@@ -132,6 +140,29 @@ pub async fn list_registrations(
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(50).clamp(1, 100);
     let offset = (page - 1) * per_page;
+    let battletag_pattern = query
+        .battletag
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("%{}%", value));
+
+    let total = db
+        .registrations
+        .count_manager_summaries(
+            query.tournament_id,
+            statuses.as_deref(),
+            battletag_pattern.clone(),
+        )
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to count registrations for tournament {}: {}",
+                query.tournament_id,
+                e
+            );
+            ApiError::InternalError { error: e.to_string() }
+        })?;
 
     let registrations = db
         .registrations
@@ -142,6 +173,7 @@ pub async fn list_registrations(
             sort_direction,
             offset,
             per_page,
+            battletag_pattern,
         )
         .await
         .map_err(|e| {
@@ -153,7 +185,12 @@ pub async fn list_registrations(
             ApiError::InternalError { error: e.to_string() }
         })?;
 
-    Ok(HttpResponse::Ok().json(registrations))
+    Ok(HttpResponse::Ok().json(RegistrationListResponse {
+        items: registrations,
+        total,
+        page,
+        per_page,
+    }))
 }
 
 #[get("/{registration_id}")]

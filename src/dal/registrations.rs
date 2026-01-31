@@ -445,6 +445,7 @@ impl RegistrationsRepo {
         sort_direction: SortDirection,
         offset: i64,
         limit: i64,
+        battletag_pattern: Option<String>,
     ) -> Result<Vec<RegistrationSummary>, sqlx::Error> {
         let mut builder = QueryBuilder::new(
             r#"
@@ -475,6 +476,11 @@ impl RegistrationsRepo {
             }
         }
 
+        if let Some(pattern) = battletag_pattern {
+            builder.push(" AND text_lower(ub.battletag) LIKE ");
+            builder.push_bind(pattern);
+        }
+
         builder.push(" ORDER BY ");
         builder.push(sort_field.as_sql());
         builder.push(" ");
@@ -488,6 +494,47 @@ impl RegistrationsRepo {
             .build_query_as::<RegistrationSummary>()
             .fetch_all(&self.pool)
             .await
+    }
+
+    pub async fn count_manager_summaries(
+        &self,
+        tournament_id: i64,
+        statuses: Option<&[RegistrationStatus]>,
+        battletag_pattern: Option<String>,
+    ) -> Result<i64, sqlx::Error> {
+        let mut builder = QueryBuilder::new(
+            r#"
+            SELECT COUNT(*)
+            FROM registrations r
+            INNER JOIN user_battletags ub
+                ON ub.id = r.user_battletag_id
+            WHERE r.tournament_id =
+            "#,
+        );
+        builder.push_bind(tournament_id);
+
+        if let Some(statuses) = statuses {
+            if !statuses.is_empty() {
+                builder.push(" AND r.status IN (");
+                let mut separated = builder.separated(", ");
+                for status in statuses {
+                    separated.push_bind(*status);
+                }
+                builder.push(")");
+            }
+        }
+
+        if let Some(pattern) = battletag_pattern {
+            builder.push(" AND text_lower(ub.battletag) LIKE ");
+            builder.push_bind(pattern);
+        }
+
+        let row = builder
+            .build_query_as::<(i64,)>()
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(row.0)
     }
 
     pub async fn get_manager_detail(
