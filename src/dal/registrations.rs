@@ -104,6 +104,12 @@ pub struct RegistrationSummary {
     pub updated_at: NaiveDateTime,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct PublicRegistrationSummary {
+    pub battletag: String,
+    pub primary_role: Option<RoleValue>,
+}
+
 pub struct RegistrationManagerDetail {
     pub registration: RegistrationRow,
     pub battletag: String,
@@ -492,6 +498,30 @@ impl RegistrationsRepo {
 
         builder
             .build_query_as::<RegistrationSummary>()
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    pub async fn list_public_summaries(
+        &self,
+        tournament_id: i64,
+    ) -> Result<Vec<PublicRegistrationSummary>, sqlx::Error> {
+        sqlx::query_as::<_, PublicRegistrationSummary>(
+            r#"
+            SELECT
+                ub.battletag,
+                r.primary_role
+            FROM registrations r
+            INNER JOIN user_battletags ub
+                ON ub.id = r.user_battletag_id
+            WHERE r.tournament_id = ?1
+              AND r.status NOT IN (?2, ?3)
+            ORDER BY text_lower(ub.battletag)
+            "#,
+        )
+            .bind(tournament_id)
+            .bind(RegistrationStatus::Declined)
+            .bind(RegistrationStatus::Deleted)
             .fetch_all(&self.pool)
             .await
     }
