@@ -206,3 +206,199 @@ async fn auth_battlenet_callback_success_creates_user() {
     let roles = body["user"]["roles"].as_array().expect("roles array");
     assert!(roles.iter().any(|r| r == "normal_user"));
 }
+
+#[actix_web::test]
+async fn auth_battlenet_callback_invalid_state_returns_400() {
+    let db = TestDb::new().await;
+    let dal = Dal::from_pool(db.pool.clone());
+    let config = build_config();
+    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(config)))
+            .app_data(web::Data::new(state_store))
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/public/v1/auth/battlenet/callback?code=abc&state=missing")
+        .insert_header(("host", "main.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 400);
+}
+
+#[actix_web::test]
+async fn auth_battlenet_callback_token_non_200_returns_500() {
+    let db = TestDb::new().await;
+    let dal = Dal::from_pool(db.pool.clone());
+    let mut config = build_config();
+    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
+    let state = "state-token-err".to_string();
+    state_store.add_state(state.clone());
+
+    let server = MockServer::start_async().await;
+    config.battlenet.token_url = Some(format!("{}/token", server.base_url()));
+    config.battlenet.userinfo_url = Some(format!("{}/userinfo", server.base_url()));
+
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(400).body("bad token");
+        })
+        .await;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(config)))
+            .app_data(web::Data::new(state_store))
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .insert_header(("host", "main.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 500);
+}
+
+#[actix_web::test]
+async fn auth_battlenet_callback_token_invalid_json_returns_500() {
+    let db = TestDb::new().await;
+    let dal = Dal::from_pool(db.pool.clone());
+    let mut config = build_config();
+    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
+    let state = "state-token-json".to_string();
+    state_store.add_state(state.clone());
+
+    let server = MockServer::start_async().await;
+    config.battlenet.token_url = Some(format!("{}/token", server.base_url()));
+    config.battlenet.userinfo_url = Some(format!("{}/userinfo", server.base_url()));
+
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).body("not-json");
+        })
+        .await;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(config)))
+            .app_data(web::Data::new(state_store))
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .insert_header(("host", "main.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 500);
+}
+
+#[actix_web::test]
+async fn auth_battlenet_callback_userinfo_non_200_returns_500() {
+    let db = TestDb::new().await;
+    let dal = Dal::from_pool(db.pool.clone());
+    let mut config = build_config();
+    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
+    let state = "state-userinfo-err".to_string();
+    state_store.add_state(state.clone());
+
+    let server = MockServer::start_async().await;
+    config.battlenet.token_url = Some(format!("{}/token", server.base_url()));
+    config.battlenet.userinfo_url = Some(format!("{}/userinfo", server.base_url()));
+
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body(serde_json::json!({
+                "access_token": "access",
+                "token_type": "bearer",
+                "expires_in": 3600,
+                "scope": "openid"
+            }));
+        })
+        .await;
+
+    server
+        .mock_async(|when, then| {
+            when.method(GET).path("/userinfo");
+            then.status(401).body("unauthorized");
+        })
+        .await;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(config)))
+            .app_data(web::Data::new(state_store))
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .insert_header(("host", "main.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 500);
+}
+
+#[actix_web::test]
+async fn auth_battlenet_callback_userinfo_invalid_json_returns_500() {
+    let db = TestDb::new().await;
+    let dal = Dal::from_pool(db.pool.clone());
+    let mut config = build_config();
+    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
+    let state = "state-userinfo-json".to_string();
+    state_store.add_state(state.clone());
+
+    let server = MockServer::start_async().await;
+    config.battlenet.token_url = Some(format!("{}/token", server.base_url()));
+    config.battlenet.userinfo_url = Some(format!("{}/userinfo", server.base_url()));
+
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body(serde_json::json!({
+                "access_token": "access",
+                "token_type": "bearer",
+                "expires_in": 3600,
+                "scope": "openid"
+            }));
+        })
+        .await;
+
+    server
+        .mock_async(|when, then| {
+            when.method(GET).path("/userinfo");
+            then.status(200).body("not-json");
+        })
+        .await;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(config)))
+            .app_data(web::Data::new(state_store))
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .insert_header(("host", "main.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 500);
+}
