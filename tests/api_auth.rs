@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use actix_web::{App, web};
 use actix_web::test;
+use httpmock::Method::POST;
+use httpmock::Method::GET;
+use httpmock::MockServer;
 use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
@@ -63,6 +66,8 @@ fn build_config() -> Config {
             client_secret: "secret".to_string(),
             redirect_uri: "/api/public/v1/auth/battlenet/callback".to_string(),
             jwks_url: "https://example.com/jwks".to_string(),
+            token_url: None,
+            userinfo_url: None,
         },
     }
 }
@@ -94,34 +99,6 @@ async fn auth_battlenet_returns_auth_url() {
     let auth_url = body["auth_url"].as_str().expect("auth_url");
     assert!(auth_url.starts_with("https://oauth.battle.net/authorize?"));
     assert!(auth_url.contains("redirect_uri=https%3A%2F%2Fmain.example%2Fapi%2Fpublic%2Fv1%2Fauth%2Fbattlenet%2Fcallback"));
-}
-
-#[actix_web::test]
-async fn auth_battlenet_uses_cn_region() {
-    let db = TestDb::new().await;
-    let dal = Dal::from_pool(db.pool.clone());
-    let config = build_config();
-    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(Arc::new(config)))
-            .app_data(web::Data::new(state_store))
-            .app_data(web::Data::new(Arc::new(dal)))
-            .configure(api::configure),
-    )
-    .await;
-
-    let req = test::TestRequest::get()
-        .uri("/api/public/v1/auth/battlenet?region=cn")
-        .insert_header(("host", "main.example"))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
-
-    let body: Value = test::read_body_json(resp).await;
-    let auth_url = body["auth_url"].as_str().expect("auth_url");
-    assert!(auth_url.starts_with("https://oauth.battlenet.com.cn/authorize?"));
 }
 
 #[actix_web::test]
@@ -170,4 +147,62 @@ async fn auth_battlenet_callback_error_returns_400() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 400);
+}
+
+#[actix_web::test]
+async fn auth_battlenet_callback_success_creates_user() {
+    let db = TestDb::new().await;
+    let dal = Dal::from_pool(db.pool.clone());
+    let mut config = build_config();
+    let state_store = OAuthStateStore::new(std::time::Duration::from_secs(3600));
+    let state = "state-ok".to_string();
+    state_store.add_state(state.clone());
+
+    let server = MockServer::start_async().await;
+    config.battlenet.token_url = Some(format!("{}/token", server.base_url()));
+    config.battlenet.userinfo_url = Some(format!("{}/userinfo", server.base_url()));
+
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body(serde_json::json!({
+                "access_token": "access",
+                "token_type": "bearer",
+                "expires_in": 3600,
+                "scope": "openid"
+            }));
+        })
+        .await;
+
+    server
+        .mock_async(|when, then| {
+            when.method(GET).path("/userinfo");
+            then.status(200).json_body(serde_json::json!({
+                "id": 1234,
+                "battletag": "User#9999"
+            }));
+        })
+        .await;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(config)))
+            .app_data(web::Data::new(state_store))
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .insert_header(("host", "main.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let body: Value = test::read_body_json(resp).await;
+    assert_eq!(body["user"]["id"], 1234);
+    assert_eq!(body["user"]["battletag"], "User#9999");
+    let roles = body["user"]["roles"].as_array().expect("roles array");
+    assert!(roles.iter().any(|r| r == "normal_user"));
 }

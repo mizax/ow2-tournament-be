@@ -43,11 +43,6 @@ const BATTLE_NET_TOKEN_URL: &str = "https://oauth.battle.net/token";
 const BATTLE_NET_USERINFO_URL: &str = "https://oauth.battle.net/userinfo";
 
 #[derive(Deserialize)]
-pub struct AuthRequest {
-    pub region: Option<String>,
-}
-
-#[derive(Deserialize)]
 pub struct CallbackQuery {
     pub code: Option<String>,
     pub state: Option<String>,
@@ -58,7 +53,6 @@ pub struct CallbackQuery {
 #[get("/battlenet")]
 pub async fn auth(
     req: actix_web::HttpRequest,
-    query: web::Query<AuthRequest>,
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,
 ) -> Result<impl Responder> {
@@ -91,14 +85,9 @@ pub async fn auth(
     params.insert("scope", "openid".to_string());
     params.insert("state", state);
 
-    let base_url = match query.region.as_deref() {
-        Some("cn") => "https://oauth.battlenet.com.cn/authorize",
-        _ => BATTLE_NET_AUTH_URL,
-    };
-
     let auth_url = format!(
         "{}?{}",
-        base_url,
+        BATTLE_NET_AUTH_URL,
         serde_urlencoded::to_string(&params).map_err(|e| ApiError::InternalError { error: e.to_string() })?
     );
 
@@ -155,8 +144,20 @@ pub async fn callback(
 
     let client = reqwest::Client::new();
     
+    let token_url = config
+        .battlenet
+        .token_url
+        .as_deref()
+        .unwrap_or(BATTLE_NET_TOKEN_URL);
+
+    let userinfo_url = config
+        .battlenet
+        .userinfo_url
+        .as_deref()
+        .unwrap_or(BATTLE_NET_USERINFO_URL);
+
     let token_response = client
-        .post(BATTLE_NET_TOKEN_URL)
+        .post(token_url)
         .basic_auth(&config.battlenet.client_id, Some(&config.battlenet.client_secret))
         .form(&[
             ("grant_type", "authorization_code"),
@@ -180,7 +181,7 @@ pub async fn callback(
         .map_err(|e| ApiError::InternalError { error: format!("Failed to parse token response: {}", e) })?;
 
     let userinfo_response = client
-        .get(BATTLE_NET_USERINFO_URL)
+        .get(userinfo_url)
         .bearer_auth(&tokens.access_token)
         .send()
         .await

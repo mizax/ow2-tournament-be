@@ -20,6 +20,10 @@ pub struct BattleNetConfig {
     pub client_secret: String,
     pub redirect_uri: String,
     pub jwks_url: String,
+    #[serde(default)]
+    pub token_url: Option<String>,
+    #[serde(default)]
+    pub userinfo_url: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
