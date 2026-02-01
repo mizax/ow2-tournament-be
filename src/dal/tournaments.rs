@@ -223,3 +223,25 @@ fn format_prize_pool(amount: f64, currency: &str) -> Option<String> {
 
     Some(format!("{} {}", formatted_amount, currency))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::format_prize_pool;
+
+    #[test]
+    fn format_prize_pool_returns_none_for_invalid_inputs() {
+        assert_eq!(format_prize_pool(0.0, "USD"), None);
+        assert_eq!(format_prize_pool(-5.0, "USD"), None);
+        assert_eq!(format_prize_pool(10.0, ""), None);
+    }
+
+    #[test]
+    fn format_prize_pool_formats_integers_without_decimal() {
+        assert_eq!(format_prize_pool(100.0, "USD"), Some("100 USD".to_string()));
+    }
+
+    #[test]
+    fn format_prize_pool_formats_fractional_amounts() {
+        assert_eq!(format_prize_pool(12.5, "EUR"), Some("12.5 EUR".to_string()));
+    }
+}

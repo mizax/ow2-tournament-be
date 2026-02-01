@@ -37,3 +37,6 @@ mime_guess = "2.0.4"
 csv = "1.4.0"
 enum_dispatch = "0.3.13"
 tracing = "0.1.44"
+
+[dev-dependencies]
+tempfile = "3.10.1"

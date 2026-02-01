@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use log::{error, info};
 use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
-use crate::Dal;
+use crate::dal::Dal;
 
 pub async fn register_sqlite_auto_vacuum_job(
     scheduler: &JobScheduler,

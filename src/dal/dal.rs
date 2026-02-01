@@ -44,6 +44,22 @@ impl Dal {
         }
     }
 
+    pub fn from_pool(db_pool: Pool<Sqlite>) -> Self {
+        Dal {
+            matches: MatchesRepo::new(db_pool.clone()),
+            teams: TeamsRepo::new(db_pool.clone()),
+            players: PlayersRepo::new(db_pool.clone()),
+            heroes: HeroesRepo::new(db_pool.clone()),
+            match_events: MatchEventsRepo::new(db_pool.clone()),
+            match_player_statistics: MatchPlayerStatisticsRepo::new(db_pool.clone()),
+            users: UsersRepo::new(db_pool.clone()),
+            tournaments: TournamentsRepo::new(db_pool.clone()),
+            registrations: RegistrationsRepo::new(db_pool.clone()),
+            tournament_managers: TournamentManagersRepo::new(db_pool.clone()),
+            db_pool,
+        }
+    }
+
     pub async fn autovacuum(&self) -> Result<(), sqlx::Error> {
         sqlx::query("PRAGMA incremental_vacuum;")
             .execute(&self.db_pool)

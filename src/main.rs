@@ -1,21 +1,15 @@
 use std::sync::Arc;
 use actix_web::{web, App, HttpServer};
 use tokio::try_join;
-use crate::config::Config;
-use crate::dal::dal::Dal;
-use crate::storage::create_storage;
-use crate::api::auth::state_store::OAuthStateStore;
-use crate::api::auth::jwks::BNETJwksService;
+use ow2_tournament_be::config::Config;
+use ow2_tournament_be::dal::dal::Dal;
+use ow2_tournament_be::storage::create_storage;
+use ow2_tournament_be::api::auth::state_store::OAuthStateStore;
+use ow2_tournament_be::api::auth::jwks::BNETJwksService;
 use std::time::Duration;
 
-mod config;
-mod dal;
-mod jobs;
-mod api;
-mod error;
-mod storage;
-mod logs_parser;
-mod shared_models;
+use ow2_tournament_be::api;
+use ow2_tournament_be::jobs;
 
 const LOGGER_FORMAT: &'static str = "%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 

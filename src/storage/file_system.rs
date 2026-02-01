@@ -234,3 +234,53 @@ impl Storage for FileSystemStorage {
         Ok(format!("{}/api/files/{}", self.serve_url.clone(), path))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FileSystemStorage;
+    use crate::storage::Storage;
+
+    #[tokio::test]
+    async fn store_and_retrieve_file_from_bytes() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let storage = FileSystemStorage::with_sharding(
+            temp_dir.path(),
+            2,
+            2,
+            "http://example.com".to_string(),
+        );
+
+        let data = b"hello world".to_vec();
+        let metadata = storage
+            .store_file_from_bytes("", "test.txt", data.clone(), Some("text/plain"))
+            .await
+            .expect("store_file_from_bytes");
+
+        assert!(metadata.path.starts_with("uploads/"));
+        assert_eq!(metadata.size, data.len() as u64);
+        assert!(metadata.url.contains("/api/files/"));
+
+        let stored = storage
+            .get_file(&metadata.path)
+            .await
+            .expect("get_file");
+        assert_eq!(stored, data);
+
+        let exists = storage
+            .file_exists(&metadata.path)
+            .await
+            .expect("file_exists");
+        assert!(exists);
+
+        storage
+            .delete_file(&metadata.path)
+            .await
+            .expect("delete_file");
+
+        let exists = storage
+            .file_exists(&metadata.path)
+            .await
+            .expect("file_exists");
+        assert!(!exists);
+    }
+}

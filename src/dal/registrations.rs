@@ -934,3 +934,26 @@ fn parse_optional_list(payload: &str) -> Result<Option<Vec<String>>, sqlx::Error
         Ok(Some(items))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_optional_list;
+
+    #[test]
+    fn parse_optional_list_returns_none_for_empty_list() {
+        let result = parse_optional_list("[]").expect("should parse");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn parse_optional_list_returns_values_for_non_empty_list() {
+        let result = parse_optional_list("[\"a\",\"b\"]").expect("should parse");
+        assert_eq!(result, Some(vec!["a".to_string(), "b".to_string()]));
+    }
+
+    #[test]
+    fn parse_optional_list_returns_error_for_invalid_json() {
+        let result = parse_optional_list("{not-json}");
+        assert!(result.is_err());
+    }
+}

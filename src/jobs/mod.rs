@@ -2,7 +2,7 @@ mod sqlite_auto_vacuum;
 
 use std::sync::Arc;
 use tokio_cron_scheduler::{JobScheduler, JobSchedulerError};
-use crate::Dal;
+use crate::dal::Dal;
 
 pub async fn init_scheduler(
     dal: Arc<Dal>,

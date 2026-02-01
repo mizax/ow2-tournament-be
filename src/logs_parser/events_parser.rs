@@ -78,3 +78,70 @@ fn parse_timestamp(value: String) -> Result<NaiveTime, ParseError> {
 fn get(record: &csv::StringRecord, index: usize) -> String {
     record.get(index).unwrap_or("").trim().to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_csv, ParseError};
+    use crate::logs_parser::event_types::LogEvent;
+
+    #[test]
+    fn parse_csv_parses_player_stat_event() {
+        let csv = "[12:34:56],player_stat,,1, Red Team , PlayerOne , Tracer , 10 , 20 , 30\n";
+        let events = parse_csv(csv).expect("parse_csv should succeed");
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            LogEvent::PlayerStatEvent(event) => {
+                assert_eq!(event.event_name, "player_stat");
+                assert_eq!(event.round, Some(1));
+                assert_eq!(event.team, "Red Team");
+                assert_eq!(event.player, "PlayerOne");
+                assert_eq!(event.hero, "Tracer");
+                assert_eq!(event.stats, vec!["10", "20", "30"]);
+                assert_eq!(event.timestamp.format("%H:%M:%S").to_string(), "12:34:56");
+            }
+            _ => panic!("expected PlayerStatEvent"),
+        }
+    }
+
+    #[test]
+    fn parse_csv_parses_round_start_event() {
+        let csv = "[00:00:05],round_start,,2\n";
+        let events = parse_csv(csv).expect("parse_csv should succeed");
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            LogEvent::RoundStartEvent(event) => {
+                assert_eq!(event.event_name, "round_start");
+                assert_eq!(event.round, Some(2));
+                assert_eq!(event.timestamp.format("%H:%M:%S").to_string(), "00:00:05");
+            }
+            _ => panic!("expected RoundStartEvent"),
+        }
+    }
+
+    #[test]
+    fn parse_csv_parses_generic_event() {
+        let csv = "[01:02:03],custom_event, foo , bar\n";
+        let events = parse_csv(csv).expect("parse_csv should succeed");
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            LogEvent::GenericEvent(event) => {
+                assert_eq!(event.event_name, "custom_event");
+                assert_eq!(event.fields, vec!["[01:02:03]", "custom_event", "foo", "bar"]);
+            }
+            _ => panic!("expected GenericEvent"),
+        }
+    }
+
+    #[test]
+    fn parse_csv_reports_invalid_timestamp() {
+        let csv = "not-a-time,player_stat\n";
+        let err = parse_csv(csv).expect_err("parse_csv should fail");
+        match err {
+            ParseError::Timestamp(value) => assert_eq!(value, "not-a-time"),
+            _ => panic!("expected Timestamp error"),
+        }
+    }
+}

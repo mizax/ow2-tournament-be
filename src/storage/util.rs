@@ -13,3 +13,26 @@ pub fn compose_sharded_path(random_part: &str, shard_levels: usize, shard_chars:
     
     sharded_path
 }
+
+#[cfg(test)]
+mod tests {
+    use super::compose_sharded_path;
+
+    #[test]
+    fn compose_sharded_path_splits_into_levels() {
+        let path = compose_sharded_path("ABCDEFGH", 2, 2);
+        assert_eq!(path, "AB/CD/");
+    }
+
+    #[test]
+    fn compose_sharded_path_stops_when_random_part_exhausted() {
+        let path = compose_sharded_path("AB", 3, 2);
+        assert_eq!(path, "AB/");
+    }
+
+    #[test]
+    fn compose_sharded_path_zero_levels_is_empty() {
+        let path = compose_sharded_path("ABCDEFG", 0, 2);
+        assert_eq!(path, "");
+    }
+}
