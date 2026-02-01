@@ -1,6 +1,6 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, QueryBuilder, Sqlite};
+use sqlx::{Executor, Pool, QueryBuilder, Sqlite};
 use std::error::Error as StdError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
@@ -213,6 +213,19 @@ impl RegistrationsRepo {
     }
 
     pub async fn find_user_registration(&self, user_id: i64, tournament_id: i64) -> Result<Option<RegistrationRow>, sqlx::Error> {
+        self.find_user_registration_with_executor(&self.pool, user_id, tournament_id)
+            .await
+    }
+
+    pub async fn find_user_registration_with_executor<'e, E>(
+        &self,
+        executor: E,
+        user_id: i64,
+        tournament_id: i64,
+    ) -> Result<Option<RegistrationRow>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_as::<_, RegistrationRow>(
             r#"
             SELECT
@@ -245,11 +258,24 @@ impl RegistrationsRepo {
             .bind(tournament_id)
             .bind(RegistrationStatus::Deleted)
             .bind(user_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
     }
 
     pub async fn find_by_id_for_user(&self, registration_id: i64, user_id: i64) -> Result<Option<RegistrationDetails>, sqlx::Error> {
+        self.find_by_id_for_user_with_executor(&self.pool, registration_id, user_id)
+            .await
+    }
+
+    pub async fn find_by_id_for_user_with_executor<'e, E>(
+        &self,
+        executor: E,
+        registration_id: i64,
+        user_id: i64,
+    ) -> Result<Option<RegistrationDetails>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let row = sqlx::query_as::<_, RegistrationRow>(
             r#"
             SELECT
@@ -281,7 +307,7 @@ impl RegistrationsRepo {
             .bind(registration_id)
             .bind(user_id)
             .bind(RegistrationStatus::Deleted)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await?;
 
         let Some(row) = row else {
@@ -312,6 +338,18 @@ impl RegistrationsRepo {
         &self,
         registration_id: i64,
     ) -> Result<Option<String>, sqlx::Error> {
+        self.get_latest_pending_action_comment_with_executor(&self.pool, registration_id)
+            .await
+    }
+
+    pub async fn get_latest_pending_action_comment_with_executor<'e, E>(
+        &self,
+        executor: E,
+        registration_id: i64,
+    ) -> Result<Option<String>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_scalar::<_, String>(
             r#"
             SELECT description
@@ -324,7 +362,7 @@ impl RegistrationsRepo {
         )
         .bind(registration_id)
         .bind(ActionStatus::Pending)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await
     }
 
@@ -333,6 +371,19 @@ impl RegistrationsRepo {
         tournament_id: i64,
         user_id: i64,
     ) -> Result<bool, sqlx::Error> {
+        self.active_registration_exists_with_executor(&self.pool, tournament_id, user_id)
+            .await
+    }
+
+    pub async fn active_registration_exists_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let exists = sqlx::query_scalar::<_, i64>(
             r#"
             SELECT 1
@@ -346,7 +397,7 @@ impl RegistrationsRepo {
             .bind(tournament_id)
             .bind(user_id)
             .bind(RegistrationStatus::Deleted)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await?
             .is_some();
 
@@ -354,6 +405,17 @@ impl RegistrationsRepo {
     }
 
     pub async fn create(&self, registration: NewRegistration) -> Result<i64, sqlx::Error> {
+        self.create_with_executor(&self.pool, registration).await
+    }
+
+    pub async fn create_with_executor<'e, E>(
+        &self,
+        executor: E,
+        registration: NewRegistration,
+    ) -> Result<i64, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let result = sqlx::query(
             r#"
             INSERT INTO registrations (
@@ -399,7 +461,7 @@ impl RegistrationsRepo {
             .bind(registration.ip_address)
             .bind(registration.user_agent)
             .bind(registration.decline_reason)
-            .execute(&self.pool)
+            .execute(executor)
             .await?;
 
         Ok(result.last_insert_rowid())
@@ -409,6 +471,18 @@ impl RegistrationsRepo {
         &self,
         tournament_id: i64,
     ) -> Result<Vec<RegistrationRow>, sqlx::Error> {
+        self.list_accepted_for_tournament_with_executor(&self.pool, tournament_id)
+            .await
+    }
+
+    pub async fn list_accepted_for_tournament_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+    ) -> Result<Vec<RegistrationRow>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_as::<_, RegistrationRow>(
             r#"
             SELECT
@@ -439,7 +513,7 @@ impl RegistrationsRepo {
         )
             .bind(tournament_id)
             .bind(RegistrationStatus::Accepted)
-            .fetch_all(&self.pool)
+            .fetch_all(executor)
             .await
     }
 
@@ -453,6 +527,33 @@ impl RegistrationsRepo {
         limit: i64,
         battletag_pattern: Option<String>,
     ) -> Result<Vec<RegistrationSummary>, sqlx::Error> {
+        self.list_manager_summaries_with_executor(
+            &self.pool,
+            tournament_id,
+            statuses,
+            sort_field,
+            sort_direction,
+            offset,
+            limit,
+            battletag_pattern,
+        )
+        .await
+    }
+
+    pub async fn list_manager_summaries_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+        statuses: Option<&[RegistrationStatus]>,
+        sort_field: RegistrationSortField,
+        sort_direction: SortDirection,
+        offset: i64,
+        limit: i64,
+        battletag_pattern: Option<String>,
+    ) -> Result<Vec<RegistrationSummary>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let mut builder = QueryBuilder::new(
             r#"
             SELECT
@@ -498,7 +599,7 @@ impl RegistrationsRepo {
 
         builder
             .build_query_as::<RegistrationSummary>()
-            .fetch_all(&self.pool)
+            .fetch_all(executor)
             .await
     }
 
@@ -506,6 +607,18 @@ impl RegistrationsRepo {
         &self,
         tournament_id: i64,
     ) -> Result<Vec<PublicRegistrationSummary>, sqlx::Error> {
+        self.list_public_summaries_with_executor(&self.pool, tournament_id)
+            .await
+    }
+
+    pub async fn list_public_summaries_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+    ) -> Result<Vec<PublicRegistrationSummary>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_as::<_, PublicRegistrationSummary>(
             r#"
             SELECT
@@ -522,7 +635,7 @@ impl RegistrationsRepo {
             .bind(tournament_id)
             .bind(RegistrationStatus::Declined)
             .bind(RegistrationStatus::Deleted)
-            .fetch_all(&self.pool)
+            .fetch_all(executor)
             .await
     }
 
@@ -532,6 +645,20 @@ impl RegistrationsRepo {
         statuses: Option<&[RegistrationStatus]>,
         battletag_pattern: Option<String>,
     ) -> Result<i64, sqlx::Error> {
+        self.count_manager_summaries_with_executor(&self.pool, tournament_id, statuses, battletag_pattern)
+            .await
+    }
+
+    pub async fn count_manager_summaries_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+        statuses: Option<&[RegistrationStatus]>,
+        battletag_pattern: Option<String>,
+    ) -> Result<i64, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let mut builder = QueryBuilder::new(
             r#"
             SELECT COUNT(*)
@@ -561,7 +688,7 @@ impl RegistrationsRepo {
 
         let row = builder
             .build_query_as::<(i64,)>()
-            .fetch_one(&self.pool)
+            .fetch_one(executor)
             .await?;
 
         Ok(row.0)
@@ -571,6 +698,19 @@ impl RegistrationsRepo {
         &self,
         registration_id: i64,
     ) -> Result<Option<RegistrationManagerDetail>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        self.get_manager_detail_with_executor(&mut *conn, registration_id)
+            .await
+    }
+
+    pub async fn get_manager_detail_with_executor<'e, E>(
+        &self,
+        executor: &mut E,
+        registration_id: i64,
+    ) -> Result<Option<RegistrationManagerDetail>, sqlx::Error>
+    where
+        for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
+    {
         let row = sqlx::query_as::<_, RegistrationWithBattletagRow>(
             r#"
             SELECT
@@ -602,7 +742,7 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *executor)
         .await?;
 
         let Some(row) = row else {
@@ -645,7 +785,7 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *executor)
         .await?;
 
         let requested_actions = sqlx::query_as::<_, RegistrationRequestedAction>(
@@ -664,7 +804,7 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *executor)
         .await?;
 
         let role_rankings = sqlx::query_as::<_, RegistrationRoleRanking>(
@@ -681,7 +821,7 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *executor)
         .await?;
 
         Ok(Some(RegistrationManagerDetail {
@@ -699,6 +839,21 @@ impl RegistrationsRepo {
         manager_user_id: i64,
         comment: String,
     ) -> Result<RegistrationComment, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        self.create_comment_with_executor(&mut *conn, registration_id, manager_user_id, comment)
+            .await
+    }
+
+    pub async fn create_comment_with_executor<'e, E>(
+        &self,
+        executor: &mut E,
+        registration_id: i64,
+        manager_user_id: i64,
+        comment: String,
+    ) -> Result<RegistrationComment, sqlx::Error>
+    where
+        for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
+    {
         let result = sqlx::query(
             r#"
             INSERT INTO registration_comments (
@@ -713,7 +868,7 @@ impl RegistrationsRepo {
         .bind(registration_id)
         .bind(manager_user_id)
         .bind(comment)
-        .execute(&self.pool)
+        .execute(&mut *executor)
         .await?;
 
         let comment_id = result.last_insert_rowid();
@@ -731,7 +886,7 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(comment_id)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *executor)
         .await
     }
 
@@ -745,6 +900,33 @@ impl RegistrationsRepo {
     ) -> Result<RegistrationRow, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
 
+        let updated = self
+            .update_status_with_action_with_executor(
+                &mut *tx,
+                registration_id,
+                status,
+                decline_reason,
+                requested_action_description,
+                manager_user_id,
+            )
+            .await?;
+
+        tx.commit().await?;
+        Ok(updated)
+    }
+
+    pub async fn update_status_with_action_with_executor<'e, E>(
+        &self,
+        executor: &mut E,
+        registration_id: i64,
+        status: RegistrationStatus,
+        decline_reason: Option<String>,
+        requested_action_description: Option<String>,
+        manager_user_id: i64,
+    ) -> Result<RegistrationRow, sqlx::Error>
+    where
+        for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
+    {
         sqlx::query(
             r#"
             UPDATE registrations
@@ -758,7 +940,7 @@ impl RegistrationsRepo {
         .bind(status)
         .bind(decline_reason)
         .bind(registration_id)
-        .execute(&mut *tx)
+        .execute(&mut *executor)
         .await?;
 
         if status == RegistrationStatus::ActionRequired {
@@ -780,7 +962,7 @@ impl RegistrationsRepo {
                 .bind(manager_user_id)
                 .bind(description)
                 .bind(ActionStatus::Pending)
-                .execute(&mut *tx)
+                .execute(&mut *executor)
                 .await?;
             }
         }
@@ -813,10 +995,9 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut *executor)
         .await?;
 
-        tx.commit().await?;
         Ok(updated)
     }
 
@@ -827,6 +1008,23 @@ impl RegistrationsRepo {
     ) -> Result<Vec<RegistrationRoleRanking>, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
 
+        let updated = self
+            .replace_role_rankings_with_executor(&mut *tx, registration_id, rankings)
+            .await?;
+
+        tx.commit().await?;
+        Ok(updated)
+    }
+
+    pub async fn replace_role_rankings_with_executor<'e, E>(
+        &self,
+        executor: &mut E,
+        registration_id: i64,
+        rankings: Vec<(RoleValue, i64)>,
+    ) -> Result<Vec<RegistrationRoleRanking>, sqlx::Error>
+    where
+        for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
+    {
         sqlx::query(
             r#"
             DELETE FROM registration_role_rankings
@@ -834,7 +1032,7 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .execute(&mut *tx)
+        .execute(&mut *executor)
         .await?;
 
         for (role, ranking) in rankings {
@@ -852,7 +1050,7 @@ impl RegistrationsRepo {
             .bind(registration_id)
             .bind(role)
             .bind(ranking)
-            .execute(&mut *tx)
+            .execute(&mut *executor)
             .await?;
         }
 
@@ -870,10 +1068,9 @@ impl RegistrationsRepo {
             "#,
         )
         .bind(registration_id)
-        .fetch_all(&mut *tx)
+        .fetch_all(&mut *executor)
         .await?;
 
-        tx.commit().await?;
         Ok(updated)
     }
 
@@ -882,6 +1079,20 @@ impl RegistrationsRepo {
         registration_id: i64,
         action_id: i64,
     ) -> Result<Option<RegistrationRequestedAction>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        self.resolve_requested_action_with_executor(&mut *conn, registration_id, action_id)
+            .await
+    }
+
+    pub async fn resolve_requested_action_with_executor<'e, E>(
+        &self,
+        executor: &mut E,
+        registration_id: i64,
+        action_id: i64,
+    ) -> Result<Option<RegistrationRequestedAction>, sqlx::Error>
+    where
+        for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
+    {
         let result = sqlx::query(
             r#"
             UPDATE registration_requested_actions
@@ -894,7 +1105,7 @@ impl RegistrationsRepo {
         .bind(ActionStatus::Resolved)
         .bind(action_id)
         .bind(registration_id)
-        .execute(&self.pool)
+        .execute(&mut *executor)
         .await?;
 
         if result.rows_affected() == 0 {
@@ -919,7 +1130,7 @@ impl RegistrationsRepo {
         )
         .bind(action_id)
         .bind(registration_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *executor)
         .await
     }
 }

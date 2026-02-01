@@ -1,4 +1,4 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{Executor, Pool, Sqlite};
 
 #[derive(Clone)]
 pub struct MatchPlayerStatisticsRepo {
@@ -18,6 +18,22 @@ impl MatchPlayerStatisticsRepo {
         hero_id: i64,
         stats: &[String],
     ) -> Result<(), sqlx::Error> {
+        self.insert_with_executor(&self.pool, match_id, round, player_id, hero_id, stats)
+            .await
+    }
+
+    pub async fn insert_with_executor<'e, E>(
+        &self,
+        executor: E,
+        match_id: i64,
+        round: i64,
+        player_id: i64,
+        hero_id: i64,
+        stats: &[String],
+    ) -> Result<(), sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query(
             r#"
             INSERT INTO match_player_statistics (
@@ -79,7 +95,7 @@ impl MatchPlayerStatisticsRepo {
         .bind(get_i64(stats, 29))
         .bind(get_f64(stats, 30))
         .bind(get_f64(stats, 31))
-        .execute(&self.pool)
+        .execute(executor)
         .await?;
 
         Ok(())

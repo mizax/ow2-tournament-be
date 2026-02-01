@@ -1,4 +1,4 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{Executor, Pool, Sqlite};
 use chrono::NaiveDateTime;
 
 #[derive(Clone)]
@@ -23,7 +23,19 @@ impl TeamsRepo {
     }
 
     pub async fn get_by_tournament_and_name(&self, tournament_id: &i64, name: &str) -> Result<Option<TeamRow>, sqlx::Error> {
+        self.get_by_tournament_and_name_with_executor(&self.pool, tournament_id, name)
+            .await
+    }
 
+    pub async fn get_by_tournament_and_name_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: &i64,
+        name: &str,
+    ) -> Result<Option<TeamRow>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_as::<_, TeamRow>(
             r#"
             SELECT
@@ -40,7 +52,7 @@ impl TeamsRepo {
         )
         .bind(tournament_id)
         .bind(name)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await
     }
 }

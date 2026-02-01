@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Executor, Pool, Sqlite};
 
 #[derive(Clone)]
 pub struct TournamentManagersRepo {
@@ -21,6 +21,17 @@ impl TournamentManagersRepo {
     }
 
     pub async fn user_is_manager(&self, user_id: i64) -> Result<bool, sqlx::Error> {
+        self.user_is_manager_with_executor(&self.pool, user_id).await
+    }
+
+    pub async fn user_is_manager_with_executor<'e, E>(
+        &self,
+        executor: E,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let exists = sqlx::query_scalar::<_, i64>(
             r#"
             SELECT 1
@@ -30,7 +41,7 @@ impl TournamentManagersRepo {
             "#,
         )
         .bind(user_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?
         .is_some();
 
@@ -42,6 +53,19 @@ impl TournamentManagersRepo {
         tournament_id: i64,
         user_id: i64,
     ) -> Result<bool, sqlx::Error> {
+        self.user_is_manager_for_tournament_with_executor(&self.pool, tournament_id, user_id)
+            .await
+    }
+
+    pub async fn user_is_manager_for_tournament_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let exists = sqlx::query_scalar::<_, i64>(
             r#"
             SELECT 1
@@ -53,7 +77,7 @@ impl TournamentManagersRepo {
         )
         .bind(tournament_id)
         .bind(user_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?
         .is_some();
 
@@ -65,6 +89,19 @@ impl TournamentManagersRepo {
         registration_id: i64,
         user_id: i64,
     ) -> Result<bool, sqlx::Error> {
+        self.user_is_manager_for_registration_with_executor(&self.pool, registration_id, user_id)
+            .await
+    }
+
+    pub async fn user_is_manager_for_registration_with_executor<'e, E>(
+        &self,
+        executor: E,
+        registration_id: i64,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let exists = sqlx::query_scalar::<_, i64>(
             r#"
             SELECT 1
@@ -78,7 +115,7 @@ impl TournamentManagersRepo {
         )
         .bind(registration_id)
         .bind(user_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?
         .is_some();
 
@@ -89,6 +126,18 @@ impl TournamentManagersRepo {
         &self,
         user_id: i64,
     ) -> Result<Vec<ManagedTournamentRow>, sqlx::Error> {
+        self.list_managed_tournaments_with_executor(&self.pool, user_id)
+            .await
+    }
+
+    pub async fn list_managed_tournaments_with_executor<'e, E>(
+        &self,
+        executor: E,
+        user_id: i64,
+    ) -> Result<Vec<ManagedTournamentRow>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_as::<_, ManagedTournamentRow>(
             r#"
             SELECT
@@ -110,7 +159,7 @@ impl TournamentManagersRepo {
             "#,
         )
         .bind(user_id)
-        .fetch_all(&self.pool)
+        .fetch_all(executor)
         .await
     }
 }

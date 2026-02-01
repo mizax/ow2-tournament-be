@@ -14,6 +14,7 @@ pub struct Dal {
 }
 
 use sqlx::{Pool, Sqlite, SqlitePool};
+use futures_util::future::BoxFuture;
 
 use crate::dal::{
     HeroesRepo, MatchEventsRepo, MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo, TeamsRepo,
@@ -66,5 +67,15 @@ impl Dal {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn transaction<F, T>(&self, f: F) -> Result<T, sqlx::Error>
+    where
+        F: for<'c> FnOnce(&'c Dal, &'c mut sqlx::SqliteConnection) -> BoxFuture<'c, Result<T, sqlx::Error>>,
+    {
+        let mut tx = self.db_pool.begin().await?;
+        let result = f(self, &mut *tx).await?;
+        tx.commit().await?;
+        Ok(result)
     }
 }

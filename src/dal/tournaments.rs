@@ -1,5 +1,5 @@
 use serde_json;
-use sqlx::{Error, Pool, Sqlite};
+use sqlx::{Error, Executor, Pool, Sqlite};
 use thiserror::Error as ThisError;
 
 use crate::shared_models::tournaments::models::TournamentConfig;
@@ -66,6 +66,16 @@ impl TournamentsRepo {
     }
 
     pub async fn list_short(&self) -> Result<Vec<TournamentShortData>, TournamentsRepoError> {
+        self.list_short_with_executor(&self.pool).await
+    }
+
+    pub async fn list_short_with_executor<'e, E>(
+        &self,
+        executor: E,
+    ) -> Result<Vec<TournamentShortData>, TournamentsRepoError>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let rows = sqlx::query_as::<_, TournamentShortRow>(
             r#"
             SELECT
@@ -95,7 +105,7 @@ impl TournamentsRepo {
             ORDER BY t.id
             "#,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(executor)
         .await?;
 
         let mut tournaments = Vec::with_capacity(rows.len());
@@ -119,13 +129,25 @@ impl TournamentsRepo {
     }
 
     pub async fn get_id_by_sef_title(&self, sef_title: &str) -> Result<Option<i64>, Error> {
+        self.get_id_by_sef_title_with_executor(&self.pool, sef_title)
+            .await
+    }
+
+    pub async fn get_id_by_sef_title_with_executor<'e, E>(
+        &self,
+        executor: E,
+        sef_title: &str,
+    ) -> Result<Option<i64>, Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_scalar::<_, i64>(
             r#"
             SELECT id FROM tournaments WHERE sef_title = ?1 LIMIT 1
             "#,
         )
             .bind(sef_title)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
     }
 
@@ -133,6 +155,18 @@ impl TournamentsRepo {
         &self,
         sef_title: &str,
     ) -> Result<Option<TournamentDetailsData>, TournamentsRepoError> {
+        self.get_by_sef_title_with_executor(&self.pool, sef_title)
+            .await
+    }
+
+    pub async fn get_by_sef_title_with_executor<'e, E>(
+        &self,
+        executor: E,
+        sef_title: &str,
+    ) -> Result<Option<TournamentDetailsData>, TournamentsRepoError>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let row = sqlx::query_as::<_, TournamentConfigRow>(
             r#"
             SELECT
@@ -147,10 +181,10 @@ impl TournamentsRepo {
                 ON tc.tournament_id = t.id
             WHERE t.sef_title = ?1
             LIMIT 1
-            "#,
+        "#,
         )
         .bind(sef_title)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?;
 
         let Some(row) = row else {
@@ -173,6 +207,17 @@ impl TournamentsRepo {
         &self,
         id: i64,
     ) -> Result<Option<TournamentDetailsData>, TournamentsRepoError> {
+        self.get_by_id_with_executor(&self.pool, id).await
+    }
+
+    pub async fn get_by_id_with_executor<'e, E>(
+        &self,
+        executor: E,
+        id: i64,
+    ) -> Result<Option<TournamentDetailsData>, TournamentsRepoError>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let row = sqlx::query_as::<_, TournamentConfigRow>(
             r#"
             SELECT
@@ -187,10 +232,10 @@ impl TournamentsRepo {
                 ON tc.tournament_id = t.id
             WHERE t.id = ?1
             LIMIT 1
-            "#,
+        "#,
         )
         .bind(id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?;
 
         let Some(row) = row else {

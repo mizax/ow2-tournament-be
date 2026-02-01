@@ -202,39 +202,40 @@ pub async fn callback(
     let user_id = i64::try_from(bnet_user.id)
         .map_err(|_| ApiError::InternalError { error: "Battle.net user id out of range".to_string() })?;
 
-    let existing_user = db.users
-        .find_by_id(user_id)
+    let (existing_user, battletag) = db
+        .transaction(|dal, conn| Box::pin(async move {
+            let existing_user = dal.users
+                .find_by_id_with_executor(&mut *conn, user_id)
+                .await?;
+
+            if existing_user.is_none() {
+                dal.users
+                    .create_user_with_executor(&mut *conn, user_id)
+                    .await?;
+
+                dal.users
+                    .insert_battletag_with_executor(&mut *conn, user_id, &bnet_user.battletag)
+                    .await?;
+            } else {
+                let battletag_exists = dal.users
+                    .battletag_exists_with_executor(&mut *conn, user_id, &bnet_user.battletag)
+                    .await?;
+
+                if !battletag_exists {
+                    dal.users
+                        .insert_battletag_with_executor(&mut *conn, user_id, &bnet_user.battletag)
+                        .await?;
+
+                    dal.users
+                        .touch_updated_at_with_executor(&mut *conn, user_id)
+                        .await?;
+                }
+            }
+
+            Ok::<_, sqlx::Error>((existing_user, bnet_user.battletag.clone()))
+        }))
         .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to fetch user: {}", e) })?;
-
-    if existing_user.is_none() {
-        db.users
-            .create_user(user_id)
-            .await
-            .map_err(|e| ApiError::InternalError { error: format!("Failed to create user: {}", e) })?;
-
-        db.users
-            .insert_battletag(user_id, &bnet_user.battletag)
-            .await
-            .map_err(|e| ApiError::InternalError { error: format!("Failed to insert battletag: {}", e) })?;
-    } else {
-        let battletag_exists = db.users
-            .battletag_exists(user_id, &bnet_user.battletag)
-            .await
-            .map_err(|e| ApiError::InternalError { error: format!("Failed to check battletag: {}", e) })?;
-
-        if !battletag_exists {
-            db.users
-                .insert_battletag(user_id, &bnet_user.battletag)
-                .await
-                .map_err(|e| ApiError::InternalError { error: format!("Failed to insert battletag: {}", e) })?;
-
-            db.users
-                .touch_updated_at(user_id)
-                .await
-                .map_err(|e| ApiError::InternalError { error: format!("Failed to update user timestamp: {}", e) })?;
-        }
-    }
+        .map_err(|e| ApiError::InternalError { error: format!("Failed to sync user: {}", e) })?;
 
     let mut roles = vec![UserRole::NormalUser];
     if existing_user.as_ref().map(|user| user.is_admin).unwrap_or(false) {
@@ -252,7 +253,7 @@ pub async fn callback(
     let response = AuthResponse {
         user: User {
             id: bnet_user.id,
-            battletag: bnet_user.battletag,
+            battletag,
             roles,
         },
         id_token: tokens.id_token,

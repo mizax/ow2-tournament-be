@@ -1,4 +1,4 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{Executor, Pool, Sqlite};
 use chrono::NaiveDateTime;
 
 #[derive(Clone)]
@@ -27,17 +27,39 @@ impl MatchesRepo {
     }
 
     pub async fn exists(&self, match_id: i64) -> Result<bool, sqlx::Error> {
+        self.exists_with_executor(&self.pool, match_id).await
+    }
+
+    pub async fn exists_with_executor<'e, E>(
+        &self,
+        executor: E,
+        match_id: i64,
+    ) -> Result<bool, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let exists = sqlx::query_scalar::<_, i64>(
             r#"SELECT 1 FROM matches WHERE id = ?1 LIMIT 1"#,
         )
         .bind(match_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?;
 
         Ok(exists.is_some())
     }
 
     pub async fn get_by_id(&self, match_id: i64) -> Result<Option<MatchRow>, sqlx::Error> {
+        self.get_by_id_with_executor(&self.pool, match_id).await
+    }
+
+    pub async fn get_by_id_with_executor<'e, E>(
+        &self,
+        executor: E,
+        match_id: i64,
+    ) -> Result<Option<MatchRow>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_as::<_, MatchRow>(
             r#"
             SELECT
@@ -55,10 +77,10 @@ impl MatchesRepo {
             FROM matches
             WHERE id = ?1
             LIMIT 1
-            "#,
+        "#,
         )
         .bind(match_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await
     }
 }

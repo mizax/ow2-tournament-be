@@ -1,4 +1,4 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{Executor, Pool, Sqlite};
 
 #[derive(Clone)]
 pub struct PlayersRepo {
@@ -11,12 +11,25 @@ impl PlayersRepo {
     }
 
     pub async fn find_id_by_team_and_nickname(&self, team_id: i64, nickname: &str) -> Result<Option<i64>, sqlx::Error> {
+        self.find_id_by_team_and_nickname_with_executor(&self.pool, team_id, nickname)
+            .await
+    }
+
+    pub async fn find_id_by_team_and_nickname_with_executor<'e, E>(
+        &self,
+        executor: E,
+        team_id: i64,
+        nickname: &str,
+    ) -> Result<Option<i64>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         sqlx::query_scalar::<_, i64>(
             r#"SELECT id FROM players WHERE team_id = ?1 AND nickname = ?2"#,
         )
         .bind(team_id)
         .bind(nickname)
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await
     }
 
@@ -37,5 +50,27 @@ impl PlayersRepo {
 
         tx.commit().await?;
         Ok(id)
+    }
+
+    pub async fn create_with_executor<'e, E>(
+        &self,
+        executor: &mut E,
+        team_id: i64,
+        nickname: &str,
+    ) -> Result<i64, sqlx::Error>
+    where
+        for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
+    {
+        sqlx::query(
+            r#"INSERT INTO players (team_id, nickname) VALUES (?1, ?2)"#,
+        )
+        .bind(team_id)
+        .bind(nickname)
+        .execute(&mut *executor)
+        .await?;
+
+        sqlx::query_scalar::<_, i64>(r#"SELECT last_insert_rowid()"#)
+            .fetch_one(&mut *executor)
+            .await
     }
 }
