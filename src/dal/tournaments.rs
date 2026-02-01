@@ -25,6 +25,7 @@ pub struct TournamentShortData {
     pub format: String,
     pub dates: Vec<String>,
     pub prize_pool: Option<String>,
+    pub registration_count: i64,
 }
 
 pub struct TournamentDetailsData {
@@ -46,6 +47,7 @@ struct TournamentShortRow {
     pub dates_json: String,
     pub prize_pool_total_amount: f64,
     pub prize_pool_currency: String,
+    pub registration_count: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -67,17 +69,30 @@ impl TournamentsRepo {
         let rows = sqlx::query_as::<_, TournamentShortRow>(
             r#"
             SELECT
-                id,
-                title,
-                sef_title,
-                discipline,
-                format,
-                dates_json,
-                prize_pool_total_amount,
-                prize_pool_currency
-            FROM tournaments
-            WHERE deleted_at IS NULL
-            ORDER BY id
+                t.id,
+                t.title,
+                t.sef_title,
+                t.discipline,
+                t.format,
+                t.dates_json,
+                t.prize_pool_total_amount,
+                t.prize_pool_currency,
+                COUNT(r.id) AS registration_count
+            FROM tournaments t
+            LEFT JOIN registrations r
+                ON r.tournament_id = t.id
+               AND r.status NOT IN ('DELETED', 'DECLINED')
+            WHERE t.deleted_at IS NULL
+            GROUP BY
+                t.id,
+                t.title,
+                t.sef_title,
+                t.discipline,
+                t.format,
+                t.dates_json,
+                t.prize_pool_total_amount,
+                t.prize_pool_currency
+            ORDER BY t.id
             "#,
         )
         .fetch_all(&self.pool)
@@ -96,6 +111,7 @@ impl TournamentsRepo {
                 format: row.format,
                 dates,
                 prize_pool,
+                registration_count: row.registration_count,
             });
         }
 

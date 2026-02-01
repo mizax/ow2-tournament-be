@@ -139,4 +139,5 @@ pub struct TournamentShort {
     pub format: String,
     pub dates: Vec<String>,
     pub prize_pool: Option<String>,
+    pub registration_count: i64,
 }

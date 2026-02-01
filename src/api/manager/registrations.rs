@@ -288,16 +288,16 @@ pub async fn update_status(
     }
 
     let mut validation_errors = Vec::new();
-    if payload.status == RegistrationStatus::Declined {
-        if payload
-            .decline_reason
-            .as_ref()
-            .map(|value| value.trim().is_empty())
-            .unwrap_or(true)
-        {
-            validation_errors.push("validation.decline_reason.required".to_string());
-        }
-    }
+    // if payload.status == RegistrationStatus::Declined {
+    //     if payload
+    //         .decline_reason
+    //         .as_ref()
+    //         .map(|value| value.trim().is_empty())
+    //         .unwrap_or(true)
+    //     {
+    //         validation_errors.push("validation.decline_reason.required".to_string());
+    //     }
+    // }
     if payload.status == RegistrationStatus::ActionRequired {
         if payload
             .requested_action_description

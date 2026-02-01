@@ -26,6 +26,7 @@ pub async fn get_tournaments(
             format: row.format,
             dates: row.dates,
             prize_pool: row.prize_pool,
+            registration_count: row.registration_count,
         })
         .collect::<Vec<_>>();
 
