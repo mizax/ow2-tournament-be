@@ -945,26 +945,66 @@ impl RegistrationsRepo {
 
         if status == RegistrationStatus::ActionRequired {
             if let Some(description) = requested_action_description {
-                sqlx::query(
+                let updated = sqlx::query(
                     r#"
-                    INSERT INTO registration_requested_actions (
-                        registration_id,
-                        manager_user_id,
-                        description,
-                        status,
-                        created_at,
-                        updated_at
+                    UPDATE registration_requested_actions
+                    SET description = ?1,
+                        manager_user_id = ?2,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = (
+                        SELECT id
+                        FROM registration_requested_actions
+                        WHERE registration_id = ?3
+                          AND status = ?4
+                        ORDER BY created_at DESC
+                        LIMIT 1
                     )
-                    VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     "#,
                 )
-                .bind(registration_id)
+                .bind(&description)
                 .bind(manager_user_id)
-                .bind(description)
+                .bind(registration_id)
                 .bind(ActionStatus::Pending)
                 .execute(&mut *executor)
                 .await?;
+
+                if updated.rows_affected() == 0 {
+                    sqlx::query(
+                        r#"
+                        INSERT INTO registration_requested_actions (
+                            registration_id,
+                            manager_user_id,
+                            description,
+                            status,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        "#,
+                    )
+                    .bind(registration_id)
+                    .bind(manager_user_id)
+                    .bind(&description)
+                    .bind(ActionStatus::Pending)
+                    .execute(&mut *executor)
+                    .await?;
+                }
             }
+        } else {
+            sqlx::query(
+                r#"
+                UPDATE registration_requested_actions
+                SET status = ?1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE registration_id = ?2
+                  AND status = ?3
+                "#,
+            )
+            .bind(ActionStatus::Resolved)
+            .bind(registration_id)
+            .bind(ActionStatus::Pending)
+            .execute(&mut *executor)
+            .await?;
         }
 
         let updated = sqlx::query_as::<_, RegistrationRow>(

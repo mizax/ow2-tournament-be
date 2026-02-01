@@ -329,7 +329,7 @@ pub async fn update_status(
         None
     };
 
-    let registration = db
+    db
         .registrations
         .update_status_with_action(
             registration_id,
@@ -344,7 +344,25 @@ pub async fn update_status(
             ApiError::InternalError { error: e.to_string() }
         })?;
 
-    Ok(HttpResponse::Ok().json(map_registration(registration)?))
+    let detail = db
+        .registrations
+        .get_manager_detail(registration_id)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to load updated registration {}: {}", registration_id, e);
+            ApiError::InternalError { error: e.to_string() }
+        })?
+        .ok_or(ApiError::NotFound)?;
+
+    let registration = map_registration(detail.registration)?;
+
+    Ok(HttpResponse::Ok().json(RegistrationDetailResponse {
+        registration,
+        battletag: detail.battletag,
+        comments: detail.comments,
+        requested_actions: detail.requested_actions,
+        role_rankings: detail.role_rankings,
+    }))
 }
 
 #[patch("/{registration_id}/role-rankings")]
