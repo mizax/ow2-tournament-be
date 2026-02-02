@@ -69,6 +69,7 @@ pub struct RegistrationComment {
     pub id: i64,
     pub registration_id: i64,
     pub manager_user_id: i64,
+    pub manager_battletag: Option<String>,
     pub comment: String,
     pub created_at: NaiveDateTime,
 }
@@ -774,14 +775,21 @@ impl RegistrationsRepo {
         let comments = sqlx::query_as::<_, RegistrationComment>(
             r#"
             SELECT
-                id,
-                registration_id,
-                manager_user_id,
-                comment,
-                created_at
-            FROM registration_comments
-            WHERE registration_id = ?1
-            ORDER BY created_at DESC
+                rc.id,
+                rc.registration_id,
+                rc.manager_user_id,
+                (
+                    SELECT ub.battletag
+                    FROM user_battletags ub
+                    WHERE ub.user_id = rc.manager_user_id
+                    ORDER BY ub.created_at DESC
+                    LIMIT 1
+                ) AS manager_battletag,
+                rc.comment,
+                rc.created_at
+            FROM registration_comments rc
+            WHERE rc.registration_id = ?1
+            ORDER BY rc.created_at DESC
             "#,
         )
         .bind(registration_id)
@@ -875,13 +883,20 @@ impl RegistrationsRepo {
         sqlx::query_as::<_, RegistrationComment>(
             r#"
             SELECT
-                id,
-                registration_id,
-                manager_user_id,
-                comment,
-                created_at
-            FROM registration_comments
-            WHERE id = ?1
+                rc.id,
+                rc.registration_id,
+                rc.manager_user_id,
+                (
+                    SELECT ub.battletag
+                    FROM user_battletags ub
+                    WHERE ub.user_id = rc.manager_user_id
+                    ORDER BY ub.created_at DESC
+                    LIMIT 1
+                ) AS manager_battletag,
+                rc.comment,
+                rc.created_at
+            FROM registration_comments rc
+            WHERE rc.id = ?1
             LIMIT 1
             "#,
         )
