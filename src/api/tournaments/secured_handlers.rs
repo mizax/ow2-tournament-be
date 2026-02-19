@@ -97,6 +97,14 @@ pub async fn register(
                 });
             }
         }
+        if let Some(deadline) = registration.deadline.as_ref() {
+            if Utc::now() > *deadline {
+                return Err(ApiError::BadRequest {
+                    error: "registration_closed".to_string(),
+                    details: "Registration has already closed.".to_string(),
+                });
+            }
+        }
     }
 
     let ip_address = req
