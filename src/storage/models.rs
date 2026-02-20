@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type")]
 pub enum StorageConfig {
     #[serde(rename = "file_system")]
-    FileSystem { 
+    FileSystem {
         root_dir: String,
-        shard_levels: Option<String>,  // Number of directory levels
-        shard_chars: Option<String>,   // Characters per level
+        shard_levels: Option<String>, // Number of directory levels
+        shard_chars: Option<String>,  // Characters per level
         serve_url: Option<String>,
     },
 }
@@ -19,16 +19,16 @@ pub enum StorageConfig {
 pub struct FileMetadata {
     /// Path to the file within the storage
     pub path: String,
-    
+
     /// Size of the file in bytes
     pub size: u64,
-    
+
     /// Content type (MIME type) of the file
     pub content_type: Option<String>,
-    
+
     /// When the file was created or last modified
     pub modified: DateTime<Utc>,
-    
+
     /// URL to access the file (might be CDN, pre-signed URL, or local path)
     pub url: String,
 }

@@ -100,7 +100,11 @@ impl UsersRepo {
         .await
     }
 
-    pub async fn battletag_exists(&self, user_id: i64, battletag: &str) -> Result<bool, sqlx::Error> {
+    pub async fn battletag_exists(
+        &self,
+        user_id: i64,
+        battletag: &str,
+    ) -> Result<bool, sqlx::Error> {
         self.battletag_exists_with_executor(&self.pool, user_id, battletag)
             .await
     }
@@ -145,13 +149,11 @@ impl UsersRepo {
     where
         E: Executor<'e, Database = Sqlite>,
     {
-        sqlx::query(
-            r#"INSERT INTO user_battletags (user_id, battletag) VALUES (?1, ?2)"#,
-        )
-        .bind(user_id)
-        .bind(battletag)
-        .execute(executor)
-        .await?;
+        sqlx::query(r#"INSERT INTO user_battletags (user_id, battletag) VALUES (?1, ?2)"#)
+            .bind(user_id)
+            .bind(battletag)
+            .execute(executor)
+            .await?;
 
         Ok(())
     }
@@ -215,8 +217,11 @@ impl UsersRepo {
         .fetch_optional(executor)
         .await
     }
-    
-    pub async fn find_battletag_by_id(&self, user_battletag_id: i64) -> Result<Option<UserBattletag>, sqlx::Error> {
+
+    pub async fn find_battletag_by_id(
+        &self,
+        user_battletag_id: i64,
+    ) -> Result<Option<UserBattletag>, sqlx::Error> {
         self.find_battletag_by_id_with_executor(&self.pool, user_battletag_id)
             .await
     }
@@ -239,14 +244,16 @@ impl UsersRepo {
             FROM user_battletags
             WHERE id = ?1
             LIMIT 1
-        "#)
-            .bind(user_battletag_id)
-            .fetch_optional(executor)
-            .await
+        "#,
+        )
+        .bind(user_battletag_id)
+        .fetch_optional(executor)
+        .await
     }
 
     pub async fn touch_updated_at(&self, user_id: i64) -> Result<(), sqlx::Error> {
-        self.touch_updated_at_with_executor(&self.pool, user_id).await
+        self.touch_updated_at_with_executor(&self.pool, user_id)
+            .await
     }
 
     pub async fn touch_updated_at_with_executor<'e, E>(
@@ -257,12 +264,10 @@ impl UsersRepo {
     where
         E: Executor<'e, Database = Sqlite>,
     {
-        sqlx::query(
-            r#"UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1"#,
-        )
-        .bind(user_id)
-        .execute(executor)
-        .await?;
+        sqlx::query(r#"UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1"#)
+            .bind(user_id)
+            .execute(executor)
+            .await?;
 
         Ok(())
     }

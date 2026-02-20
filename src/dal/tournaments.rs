@@ -111,7 +111,8 @@ impl TournamentsRepo {
         let mut tournaments = Vec::with_capacity(rows.len());
         for row in rows {
             let dates: Vec<String> = serde_json::from_str(&row.dates_json)?;
-            let prize_pool = format_prize_pool(row.prize_pool_total_amount, &row.prize_pool_currency);
+            let prize_pool =
+                format_prize_pool(row.prize_pool_total_amount, &row.prize_pool_currency);
 
             tournaments.push(TournamentShortData {
                 id: row.id,
@@ -146,9 +147,9 @@ impl TournamentsRepo {
             SELECT id FROM tournaments WHERE sef_title = ?1 LIMIT 1
             "#,
         )
-            .bind(sef_title)
-            .fetch_optional(executor)
-            .await
+        .bind(sef_title)
+        .fetch_optional(executor)
+        .await
     }
 
     pub async fn get_by_sef_title(

@@ -1,5 +1,5 @@
-use sqlx::{Executor, Pool, Sqlite};
 use chrono::NaiveDateTime;
+use sqlx::{Executor, Pool, Sqlite};
 
 #[derive(Clone)]
 pub struct TeamsRepo {
@@ -7,8 +7,7 @@ pub struct TeamsRepo {
 }
 
 #[derive(sqlx::FromRow)]
-pub struct TeamRow
-{
+pub struct TeamRow {
     pub id: i64,
     pub tournament_id: i64,
     pub name: String,
@@ -22,7 +21,11 @@ impl TeamsRepo {
         Self { pool }
     }
 
-    pub async fn get_by_tournament_and_name(&self, tournament_id: &i64, name: &str) -> Result<Option<TeamRow>, sqlx::Error> {
+    pub async fn get_by_tournament_and_name(
+        &self,
+        tournament_id: &i64,
+        name: &str,
+    ) -> Result<Option<TeamRow>, sqlx::Error> {
         self.get_by_tournament_and_name_with_executor(&self.pool, tournament_id, name)
             .await
     }

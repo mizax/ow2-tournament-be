@@ -1,7 +1,7 @@
-use serde::Serialize;
-use enum_dispatch::enum_dispatch;
 use super::{BaseLogEvent, GenericEvent, PlayerStatEvent, RoundStartEvent};
 use chrono::NaiveTime;
+use enum_dispatch::enum_dispatch;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "payload")]

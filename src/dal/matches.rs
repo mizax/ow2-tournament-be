@@ -1,5 +1,5 @@
-use sqlx::{Executor, Pool, Sqlite};
 use chrono::NaiveDateTime;
+use sqlx::{Executor, Pool, Sqlite};
 
 #[derive(Clone)]
 pub struct MatchesRepo {
@@ -38,12 +38,10 @@ impl MatchesRepo {
     where
         E: Executor<'e, Database = Sqlite>,
     {
-        let exists = sqlx::query_scalar::<_, i64>(
-            r#"SELECT 1 FROM matches WHERE id = ?1 LIMIT 1"#,
-        )
-        .bind(match_id)
-        .fetch_optional(executor)
-        .await?;
+        let exists = sqlx::query_scalar::<_, i64>(r#"SELECT 1 FROM matches WHERE id = ?1 LIMIT 1"#)
+            .bind(match_id)
+            .fetch_optional(executor)
+            .await?;
 
         Ok(exists.is_some())
     }

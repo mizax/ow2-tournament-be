@@ -1,14 +1,15 @@
+use crate::api::auth::jwks::BNETJwksService;
+use crate::dal::Dal;
 use actix_web::{
+    Error, FromRequest, HttpRequest,
     dev::Payload,
     error::ErrorUnauthorized,
     http::header::{self, HeaderMap},
-    web, Error, FromRequest, HttpRequest,
+    web,
 };
-use jsonwebtoken::{decode, decode_header, Algorithm, Validation};
-use serde::{Deserialize, Serialize};
+use jsonwebtoken::{Algorithm, Validation, decode, decode_header};
 use log::error;
-use crate::api::auth::jwks::BNETJwksService;
-use crate::dal::Dal;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -35,16 +36,19 @@ pub enum UserRole {
     NormalUser,
 }
 
-pub async fn validate_token(token: &str, jwks_service: &BNETJwksService) -> Result<Claims, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn validate_token(
+    token: &str,
+    jwks_service: &BNETJwksService,
+) -> Result<Claims, Box<dyn std::error::Error + Send + Sync>> {
     let header = decode_header(token)?;
     let kid = header.kid.ok_or("No kid found in token header")?;
 
     let decoding_key = jwks_service.get_decoding_key(&kid).await?;
-    
+
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_audience(&[""]); // BattleNet might need client_id here if it's in the 'aud' claim
     // Disable audience check if we don't know the client_id yet or if it's not present in OIDC id_token from BNet in a way we want to strictly enforce here without config
-    validation.validate_aud = false; 
+    validation.validate_aud = false;
 
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
 
@@ -58,31 +62,34 @@ impl FromRequest for AuthenticatedUser {
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         let req = req.clone();
         Box::pin(async move {
-            let jwks_service = req.app_data::<web::Data<BNETJwksService>>()
+            let jwks_service = req
+                .app_data::<web::Data<BNETJwksService>>()
                 .ok_or_else(|| {
                     error!("JwksService not found in app data");
                     ErrorUnauthorized("Authentication service unavailable")
                 })?;
 
-            let db = req.app_data::<web::Data<std::sync::Arc<Dal>>>()
+            let db = req
+                .app_data::<web::Data<std::sync::Arc<Dal>>>()
                 .ok_or_else(|| {
                     error!("Dal not found in app data");
                     ErrorUnauthorized("Authentication service unavailable")
                 })?;
 
-            let token = extract_token_from_auth_header(req.headers())
-                .map_err(ErrorUnauthorized)?;
+            let token = extract_token_from_auth_header(req.headers()).map_err(ErrorUnauthorized)?;
 
             let claims = validate_token(&token, jwks_service).await.map_err(|e| {
                 error!("Token validation failed: {:?}", e);
                 ErrorUnauthorized("Invalid token")
             })?;
 
-            let user_id = claims.sub.parse::<i64>().map_err(|_| {
-                ErrorUnauthorized("Invalid user id")
-            })?;
+            let user_id = claims
+                .sub
+                .parse::<i64>()
+                .map_err(|_| ErrorUnauthorized("Invalid user id"))?;
 
-            let user = db.users
+            let user = db
+                .users
                 .find_by_id(user_id)
                 .await
                 .map_err(|e| {
@@ -100,11 +107,15 @@ impl FromRequest for AuthenticatedUser {
                 roles.push(UserRole::Admin);
             }
 
-            let is_manager = db.tournament_managers
+            let is_manager = db
+                .tournament_managers
                 .user_is_manager(user_id)
                 .await
                 .map_err(|e| {
-                    error!("Failed to check tournament manager status for user {}: {:?}", user_id, e);
+                    error!(
+                        "Failed to check tournament manager status for user {}: {:?}",
+                        user_id, e
+                    );
                     ErrorUnauthorized("Invalid user")
                 })?;
             if is_manager {

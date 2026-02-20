@@ -1,11 +1,11 @@
-use actix_web::{HttpRequest, HttpResponse, Responder, post, web, get};
-use actix_web::http::header::USER_AGENT;
-use chrono::Utc;
-use serde::Deserialize;
-use std::sync::Arc;
 use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
 use crate::dal::{Dal, NewRegistration, RegistrationStatus, RoleValue};
+use actix_web::http::header::USER_AGENT;
+use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
+use chrono::Utc;
+use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct RegistrationRequest {
@@ -84,7 +84,9 @@ pub async fn register(
         .await
         .map_err(|e| {
             log::error!("Failed to load tournament {}: {}", sef_uri, e);
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -121,80 +123,83 @@ pub async fn register(
         .unwrap_or("")
         .to_string();
 
-    let alt_accounts_json = serde_json::to_string(
-        payload.alt_accounts.as_deref().unwrap_or(&[]),
-    )
+    let alt_accounts_json = serde_json::to_string(payload.alt_accounts.as_deref().unwrap_or(&[]))
         .map_err(|e| ApiError::InternalError {
-            error: e.to_string(),
-        })?;
-    let guarantors_json = serde_json::to_string(
-        payload.guarantors.as_deref().unwrap_or(&[]),
-    )
+        error: e.to_string(),
+    })?;
+    let guarantors_json = serde_json::to_string(payload.guarantors.as_deref().unwrap_or(&[]))
         .map_err(|e| ApiError::InternalError {
             error: e.to_string(),
         })?;
 
     let registration_id = db
-        .transaction(|dal, conn| Box::pin(async move {
-            dal.users
-                .upsert_battletag_with_executor(&mut *conn, user_id, &user.battletag)
-                .await?;
+        .transaction(|dal, conn| {
+            Box::pin(async move {
+                dal.users
+                    .upsert_battletag_with_executor(&mut *conn, user_id, &user.battletag)
+                    .await?;
 
-            let user_battletag_id = dal
-                .users
-                .find_battletag_id_with_executor(&mut *conn, user_id, &user.battletag)
-                .await?
-                .ok_or_else(|| sqlx::Error::Protocol("user_battletag_missing".to_string()))?;
+                let user_battletag_id = dal
+                    .users
+                    .find_battletag_id_with_executor(&mut *conn, user_id, &user.battletag)
+                    .await?
+                    .ok_or_else(|| sqlx::Error::Protocol("user_battletag_missing".to_string()))?;
 
-            let already_registered = dal
-                .registrations
-                .active_registration_exists_with_executor(&mut *conn, tournament.id, user_id)
-                .await?;
+                let already_registered = dal
+                    .registrations
+                    .active_registration_exists_with_executor(&mut *conn, tournament.id, user_id)
+                    .await?;
 
-            if already_registered {
-                return Err(sqlx::Error::Protocol("already_registered".to_string()));
-            }
+                if already_registered {
+                    return Err(sqlx::Error::Protocol("already_registered".to_string()));
+                }
 
-            let registration = NewRegistration {
-                tournament_id: tournament.id,
-                user_id,
-                user_battletag_id,
-                status: RegistrationStatus::Pending,
-                alt_accounts_json,
-                twitch: payload.twitch.clone(),
-                discord: payload.discord.clone(),
-                primary_role: payload.primary_role,
-                secondary_role: payload.secondary_role,
-                guarantors_json,
-                additional_info: payload.additional_info.clone(),
-                rules_accepted: payload.rules_accepted,
-                ip_address,
-                user_agent,
-                decline_reason: None,
-            };
+                let registration = NewRegistration {
+                    tournament_id: tournament.id,
+                    user_id,
+                    user_battletag_id,
+                    status: RegistrationStatus::Pending,
+                    alt_accounts_json,
+                    twitch: payload.twitch.clone(),
+                    discord: payload.discord.clone(),
+                    primary_role: payload.primary_role,
+                    secondary_role: payload.secondary_role,
+                    guarantors_json,
+                    additional_info: payload.additional_info.clone(),
+                    rules_accepted: payload.rules_accepted,
+                    ip_address,
+                    user_agent,
+                    decline_reason: None,
+                };
 
-            dal.registrations
-                .create_with_executor(&mut *conn, registration)
-                .await
-        }))
+                dal.registrations
+                    .create_with_executor(&mut *conn, registration)
+                    .await
+            })
+        })
         .await
-        .map_err(|e| {
-            match e {
-                sqlx::Error::Protocol(message) if message == "already_registered" => ApiError::BadRequest {
+        .map_err(|e| match e {
+            sqlx::Error::Protocol(message) if message == "already_registered" => {
+                ApiError::BadRequest {
                     error: "already_registered".to_string(),
-                    details: "User already has an active registration for this tournament.".to_string(),
-                },
-                sqlx::Error::Protocol(message) if message == "user_battletag_missing" => ApiError::InternalError {
+                    details: "User already has an active registration for this tournament."
+                        .to_string(),
+                }
+            }
+            sqlx::Error::Protocol(message) if message == "user_battletag_missing" => {
+                ApiError::InternalError {
                     error: "User battletag not found after insert.".to_string(),
-                },
-                _ => {
-                    log::error!(
-                        "Failed to create registration for user {} in tournament {}: {}",
-                        user_id,
-                        tournament.id,
-                        e
-                    );
-                    ApiError::InternalError { error: e.to_string() }
+                }
+            }
+            _ => {
+                log::error!(
+                    "Failed to create registration for user {} in tournament {}: {}",
+                    user_id,
+                    tournament.id,
+                    e
+                );
+                ApiError::InternalError {
+                    error: e.to_string(),
                 }
             }
         })?;
@@ -222,7 +227,9 @@ pub async fn registration_status(
         .await
         .map_err(|e| {
             log::error!("Failed to load tournament {}: {}", sef_uri, e);
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -231,13 +238,26 @@ pub async fn registration_status(
         .find_user_registration(user_id, tournament_id)
         .await
         .map_err(|e| {
-            log::error!("Failed to load registration for user {} in tournament {}: {}", user_id, tournament_id, e);
-            ApiError::InternalError { error: e.to_string() }
+            log::error!(
+                "Failed to load registration for user {} in tournament {}: {}",
+                user_id,
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     let response = match request {
-        Some(request) => RegistrationStatusResponse { status: Some(request.status), request_id: Some(request.id) },
-        None => RegistrationStatusResponse { status: None, request_id: None },
+        Some(request) => RegistrationStatusResponse {
+            status: Some(request.status),
+            request_id: Some(request.id),
+        },
+        None => RegistrationStatusResponse {
+            status: None,
+            request_id: None,
+        },
     };
 
     Ok(HttpResponse::Ok().json(response))

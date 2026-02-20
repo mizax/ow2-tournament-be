@@ -1,9 +1,9 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use jsonwebtoken::DecodingKey;
+use log::info;
+use serde::Deserialize;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
-use serde::Deserialize;
-use jsonwebtoken::DecodingKey;
-use log::{info};
-use base64::{Engine as _, engine::general_purpose::{STANDARD}};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Jwk {
@@ -34,7 +34,10 @@ impl BNETJwksService {
 
     pub async fn get_keys(&self) -> Result<Vec<Jwk>, Box<dyn std::error::Error + Send + Sync>> {
         {
-            let read_guard = self.keys.read().map_err(|_| "Failed to acquire JWKS read lock")?;
+            let read_guard = self
+                .keys
+                .read()
+                .map_err(|_| "Failed to acquire JWKS read lock")?;
             if let Some((keys, last_updated)) = &*read_guard {
                 if last_updated.elapsed() < self.cache_duration {
                     return Ok(keys.clone());
@@ -51,7 +54,10 @@ impl BNETJwksService {
         let keys = response.keys;
 
         {
-            let mut write_guard = self.keys.write().map_err(|_| "Failed to acquire JWKS write lock")?;
+            let mut write_guard = self
+                .keys
+                .write()
+                .map_err(|_| "Failed to acquire JWKS write lock")?;
             *write_guard = Some((keys.clone(), Instant::now()));
         }
 
@@ -63,7 +69,9 @@ impl BNETJwksService {
         kid: &str,
     ) -> Result<DecodingKey, Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.get_keys().await?;
-        let jwk = keys.iter().find(|k| k.kid == kid)
+        let jwk = keys
+            .iter()
+            .find(|k| k.kid == kid)
             .ok_or_else(|| format!("JWK with kid {} not found", kid))?;
 
         // Battle.net: n & e — ordinary Base64, not RFC 7517 / 7518 compliant

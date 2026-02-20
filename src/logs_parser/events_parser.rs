@@ -81,7 +81,7 @@ fn get(record: &csv::StringRecord, index: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_csv, ParseError};
+    use super::{ParseError, parse_csv};
     use crate::logs_parser::event_types::LogEvent;
 
     #[test]
@@ -129,7 +129,10 @@ mod tests {
         match &events[0] {
             LogEvent::GenericEvent(event) => {
                 assert_eq!(event.event_name, "custom_event");
-                assert_eq!(event.fields, vec!["[01:02:03]", "custom_event", "foo", "bar"]);
+                assert_eq!(
+                    event.fields,
+                    vec!["[01:02:03]", "custom_event", "foo", "bar"]
+                );
             }
             _ => panic!("expected GenericEvent"),
         }

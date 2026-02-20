@@ -213,7 +213,11 @@ impl RegistrationsRepo {
         Self { pool }
     }
 
-    pub async fn find_user_registration(&self, user_id: i64, tournament_id: i64) -> Result<Option<RegistrationRow>, sqlx::Error> {
+    pub async fn find_user_registration(
+        &self,
+        user_id: i64,
+        tournament_id: i64,
+    ) -> Result<Option<RegistrationRow>, sqlx::Error> {
         self.find_user_registration_with_executor(&self.pool, user_id, tournament_id)
             .await
     }
@@ -255,15 +259,20 @@ impl RegistrationsRepo {
               AND user_id = ?3
             ORDER BY created_at DESC
             LIMIT 1
-            "#)
-            .bind(tournament_id)
-            .bind(RegistrationStatus::Deleted)
-            .bind(user_id)
-            .fetch_optional(executor)
-            .await
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(RegistrationStatus::Deleted)
+        .bind(user_id)
+        .fetch_optional(executor)
+        .await
     }
 
-    pub async fn find_by_id_for_user(&self, registration_id: i64, user_id: i64) -> Result<Option<RegistrationDetails>, sqlx::Error> {
+    pub async fn find_by_id_for_user(
+        &self,
+        registration_id: i64,
+        user_id: i64,
+    ) -> Result<Option<RegistrationDetails>, sqlx::Error> {
         self.find_by_id_for_user_with_executor(&self.pool, registration_id, user_id)
             .await
     }
@@ -304,12 +313,13 @@ impl RegistrationsRepo {
               AND user_id = ?2
               AND status != ?3
             LIMIT 1
-            "#)
-            .bind(registration_id)
-            .bind(user_id)
-            .bind(RegistrationStatus::Deleted)
-            .fetch_optional(executor)
-            .await?;
+            "#,
+        )
+        .bind(registration_id)
+        .bind(user_id)
+        .bind(RegistrationStatus::Deleted)
+        .fetch_optional(executor)
+        .await?;
 
         let Some(row) = row else {
             return Ok(None);
@@ -395,12 +405,12 @@ impl RegistrationsRepo {
             LIMIT 1
             "#,
         )
-            .bind(tournament_id)
-            .bind(user_id)
-            .bind(RegistrationStatus::Deleted)
-            .fetch_optional(executor)
-            .await?
-            .is_some();
+        .bind(tournament_id)
+        .bind(user_id)
+        .bind(RegistrationStatus::Deleted)
+        .fetch_optional(executor)
+        .await?
+        .is_some();
 
         Ok(exists)
     }
@@ -447,23 +457,23 @@ impl RegistrationsRepo {
             )
             "#,
         )
-            .bind(registration.tournament_id)
-            .bind(registration.user_id)
-            .bind(registration.user_battletag_id)
-            .bind(registration.status)
-            .bind(registration.alt_accounts_json)
-            .bind(registration.twitch)
-            .bind(registration.discord)
-            .bind(registration.primary_role)
-            .bind(registration.secondary_role)
-            .bind(registration.guarantors_json)
-            .bind(registration.additional_info)
-            .bind(registration.rules_accepted)
-            .bind(registration.ip_address)
-            .bind(registration.user_agent)
-            .bind(registration.decline_reason)
-            .execute(executor)
-            .await?;
+        .bind(registration.tournament_id)
+        .bind(registration.user_id)
+        .bind(registration.user_battletag_id)
+        .bind(registration.status)
+        .bind(registration.alt_accounts_json)
+        .bind(registration.twitch)
+        .bind(registration.discord)
+        .bind(registration.primary_role)
+        .bind(registration.secondary_role)
+        .bind(registration.guarantors_json)
+        .bind(registration.additional_info)
+        .bind(registration.rules_accepted)
+        .bind(registration.ip_address)
+        .bind(registration.user_agent)
+        .bind(registration.decline_reason)
+        .execute(executor)
+        .await?;
 
         Ok(result.last_insert_rowid())
     }
@@ -512,10 +522,10 @@ impl RegistrationsRepo {
             ORDER BY id
             "#,
         )
-            .bind(tournament_id)
-            .bind(RegistrationStatus::Accepted)
-            .fetch_all(executor)
-            .await
+        .bind(tournament_id)
+        .bind(RegistrationStatus::Accepted)
+        .fetch_all(executor)
+        .await
     }
 
     pub async fn list_manager_summaries(
@@ -633,11 +643,11 @@ impl RegistrationsRepo {
             ORDER BY text_lower(ub.battletag)
             "#,
         )
-            .bind(tournament_id)
-            .bind(RegistrationStatus::Declined)
-            .bind(RegistrationStatus::Deleted)
-            .fetch_all(executor)
-            .await
+        .bind(tournament_id)
+        .bind(RegistrationStatus::Declined)
+        .bind(RegistrationStatus::Deleted)
+        .fetch_all(executor)
+        .await
     }
 
     pub async fn count_manager_summaries(
@@ -646,8 +656,13 @@ impl RegistrationsRepo {
         statuses: Option<&[RegistrationStatus]>,
         battletag_pattern: Option<String>,
     ) -> Result<i64, sqlx::Error> {
-        self.count_manager_summaries_with_executor(&self.pool, tournament_id, statuses, battletag_pattern)
-            .await
+        self.count_manager_summaries_with_executor(
+            &self.pool,
+            tournament_id,
+            statuses,
+            battletag_pattern,
+        )
+        .await
     }
 
     pub async fn count_manager_summaries_with_executor<'e, E>(
@@ -1191,9 +1206,8 @@ impl RegistrationsRepo {
 }
 
 fn parse_optional_list(payload: &str) -> Result<Option<Vec<String>>, sqlx::Error> {
-    let items: Vec<String> = serde_json::from_str(payload).map_err(|e| {
-        sqlx::Error::Decode(Box::new(e) as Box<dyn StdError + Send + Sync>)
-    })?;
+    let items: Vec<String> = serde_json::from_str(payload)
+        .map_err(|e| sqlx::Error::Decode(Box::new(e) as Box<dyn StdError + Send + Sync>))?;
     if items.is_empty() {
         Ok(None)
     } else {

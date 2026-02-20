@@ -1,4 +1,4 @@
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, get, web};
 use chrono::NaiveDateTime;
 use serde::Serialize;
 use std::sync::Arc;
@@ -43,7 +43,9 @@ pub async fn list_managed_tournaments(
                 user_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     let response = tournaments

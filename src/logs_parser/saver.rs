@@ -32,7 +32,6 @@ pub async fn save_events(
     match_row: &MatchRow,
     events: &[LogEvent],
 ) -> Result<(), SaveError> {
-
     let mut ctx = SaveContext::new();
 
     for event in events {
@@ -68,12 +67,7 @@ pub async fn save_events(
     Ok(())
 }
 
-async fn fetch_team(
-    db: &Dal,
-    tournament_id: &i64,
-    team_name: &str,
-) -> Result<TeamRow, SaveError> {
-
+async fn fetch_team(db: &Dal, tournament_id: &i64, team_name: &str) -> Result<TeamRow, SaveError> {
     db.teams
         .get_by_tournament_and_name(tournament_id, team_name)
         .await?
@@ -81,11 +75,18 @@ async fn fetch_team(
 }
 
 async fn fetch_player_id(db: &Dal, team: &TeamRow, player: &str) -> Result<i64, SaveError> {
-    if let Some(id) = db.players.find_id_by_team_and_nickname(team.id, player).await? {
+    if let Some(id) = db
+        .players
+        .find_id_by_team_and_nickname(team.id, player)
+        .await?
+    {
         return Ok(id);
     }
 
-    Err(SaveError::PlayerNotFound(team.name.to_string(), player.to_string()))
+    Err(SaveError::PlayerNotFound(
+        team.name.to_string(),
+        player.to_string(),
+    ))
 }
 
 async fn fetch_hero_id(db: &Dal, hero: &str) -> Result<i64, SaveError> {
@@ -104,13 +105,7 @@ async fn insert_match_player_statistics(
     stats: &[String],
 ) -> Result<(), SaveError> {
     db.match_player_statistics
-        .insert(
-            match_id,
-            round,
-            player_id,
-            hero_id,
-            stats,
-        )
+        .insert(match_id, round, player_id, hero_id, stats)
         .await
         .map_err(|e| {
             tracing::error!(
@@ -125,11 +120,7 @@ async fn insert_match_player_statistics(
     Ok(())
 }
 
-async fn save_single_event(
-    db: &Dal,
-    match_id: i64,
-    event: &LogEvent,
-) -> Result<(), SaveError> {
+async fn save_single_event(db: &Dal, match_id: i64, event: &LogEvent) -> Result<(), SaveError> {
     if matches!(event, LogEvent::PlayerStatEvent(_)) {
         return Ok(());
     }

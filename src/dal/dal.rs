@@ -13,18 +13,21 @@ pub struct Dal {
     pub tournament_managers: TournamentManagersRepo,
 }
 
-use sqlx::{Pool, Sqlite, SqlitePool};
 use futures_util::future::BoxFuture;
+use sqlx::{Pool, Sqlite, SqlitePool};
 
 use crate::dal::{
-    HeroesRepo, MatchEventsRepo, MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo, TeamsRepo,
-    UsersRepo, TournamentsRepo, RegistrationsRepo, TournamentManagersRepo,
+    HeroesRepo, MatchEventsRepo, MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo,
+    RegistrationsRepo, TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo,
 };
 
 impl Dal {
     pub async fn new(config: &crate::config::Config) -> Self {
-        let sqlite_config = config.sqlite
-            .clone().try_into().expect("failed to convert sqlite config");
+        let sqlite_config = config
+            .sqlite
+            .clone()
+            .try_into()
+            .expect("failed to convert sqlite config");
         let db_pool = SqlitePool::connect_lazy_with(sqlite_config);
         sqlx::migrate!("src/migrations")
             .run(&db_pool)
@@ -71,7 +74,10 @@ impl Dal {
 
     pub async fn transaction<F, T>(&self, f: F) -> Result<T, sqlx::Error>
     where
-        F: for<'c> FnOnce(&'c Dal, &'c mut sqlx::SqliteConnection) -> BoxFuture<'c, Result<T, sqlx::Error>>,
+        F: for<'c> FnOnce(
+            &'c Dal,
+            &'c mut sqlx::SqliteConnection,
+        ) -> BoxFuture<'c, Result<T, sqlx::Error>>,
     {
         let mut tx = self.db_pool.begin().await?;
         let result = f(self, &mut *tx).await?;

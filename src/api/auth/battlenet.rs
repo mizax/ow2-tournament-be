@@ -1,13 +1,13 @@
-use actix_web::{get, web, HttpResponse, Responder, Result};
-use rand::Rng;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use crate::api::auth::jwt::UserRole;
 use crate::api::auth::state_store::OAuthStateStore;
 use crate::api::error::ApiError;
 use crate::config::Config;
 use crate::dal::Dal;
+use actix_web::{HttpResponse, Responder, Result, get, web};
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize)]
 pub struct TokenResponse {
@@ -70,7 +70,13 @@ pub async fn auth(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
 
-    let base_redirect_host = if host == config.app.alt_host.replace("http://", "").replace("https://", "") {
+    let base_redirect_host = if host
+        == config
+            .app
+            .alt_host
+            .replace("http://", "")
+            .replace("https://", "")
+    {
         &config.app.alt_host
     } else {
         &config.app.main_host
@@ -88,7 +94,9 @@ pub async fn auth(
     let auth_url = format!(
         "{}?{}",
         BATTLE_NET_AUTH_URL,
-        serde_urlencoded::to_string(&params).map_err(|e| ApiError::InternalError { error: e.to_string() })?
+        serde_urlencoded::to_string(&params).map_err(|e| ApiError::InternalError {
+            error: e.to_string()
+        })?
     );
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -108,7 +116,8 @@ pub async fn callback(
         return Err(ApiError::BadRequest {
             error: error.clone(),
             details: query.error_description.clone().unwrap_or_default(),
-        }.into());
+        }
+        .into());
     }
 
     let state = query.state.as_ref().ok_or_else(|| ApiError::BadRequest {
@@ -120,7 +129,8 @@ pub async fn callback(
         return Err(ApiError::BadRequest {
             error: "Invalid state".to_string(),
             details: "State parameter is invalid or expired".to_string(),
-        }.into());
+        }
+        .into());
     }
 
     let code = query.code.as_ref().ok_or_else(|| ApiError::BadRequest {
@@ -134,7 +144,13 @@ pub async fn callback(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
 
-    let base_redirect_host = if host == config.app.alt_host.replace("http://", "").replace("https://", "") {
+    let base_redirect_host = if host
+        == config
+            .app
+            .alt_host
+            .replace("http://", "")
+            .replace("https://", "")
+    {
         &config.app.alt_host
     } else {
         &config.app.main_host
@@ -143,7 +159,7 @@ pub async fn callback(
     let redirect_uri = format!("{}{}", base_redirect_host, config.battlenet.redirect_uri);
 
     let client = reqwest::Client::new();
-    
+
     let token_url = config
         .battlenet
         .token_url
@@ -158,7 +174,10 @@ pub async fn callback(
 
     let token_response = client
         .post(token_url)
-        .basic_auth(&config.battlenet.client_id, Some(&config.battlenet.client_secret))
+        .basic_auth(
+            &config.battlenet.client_id,
+            Some(&config.battlenet.client_secret),
+        )
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code),
@@ -166,86 +185,119 @@ pub async fn callback(
         ])
         .send()
         .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to exchange token: {}", e) })?;
+        .map_err(|e| ApiError::InternalError {
+            error: format!("Failed to exchange token: {}", e),
+        })?;
 
     if !token_response.status().is_success() {
         let error_text = token_response.text().await.unwrap_or_default();
         return Err(ApiError::InternalError {
             error: format!("Token exchange failed: {}", error_text),
-        }.into());
+        }
+        .into());
     }
 
-    let tokens: TokenResponse = token_response
-        .json()
-        .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to parse token response: {}", e) })?;
+    let tokens: TokenResponse =
+        token_response
+            .json()
+            .await
+            .map_err(|e| ApiError::InternalError {
+                error: format!("Failed to parse token response: {}", e),
+            })?;
 
     let userinfo_response = client
         .get(userinfo_url)
         .bearer_auth(&tokens.access_token)
         .send()
         .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to fetch userinfo: {}", e) })?;
+        .map_err(|e| ApiError::InternalError {
+            error: format!("Failed to fetch userinfo: {}", e),
+        })?;
 
     if !userinfo_response.status().is_success() {
         let error_text = userinfo_response.text().await.unwrap_or_default();
         return Err(ApiError::InternalError {
             error: format!("Userinfo request failed: {}", error_text),
-        }.into());
+        }
+        .into());
     }
 
-    let bnet_user: BattleNetUserInfo = userinfo_response
-        .json()
-        .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to parse userinfo response: {}", e) })?;
+    let bnet_user: BattleNetUserInfo =
+        userinfo_response
+            .json()
+            .await
+            .map_err(|e| ApiError::InternalError {
+                error: format!("Failed to parse userinfo response: {}", e),
+            })?;
 
-    let user_id = i64::try_from(bnet_user.id)
-        .map_err(|_| ApiError::InternalError { error: "Battle.net user id out of range".to_string() })?;
+    let user_id = i64::try_from(bnet_user.id).map_err(|_| ApiError::InternalError {
+        error: "Battle.net user id out of range".to_string(),
+    })?;
 
     let (existing_user, battletag) = db
-        .transaction(|dal, conn| Box::pin(async move {
-            let existing_user = dal.users
-                .find_by_id_with_executor(&mut *conn, user_id)
-                .await?;
-
-            if existing_user.is_none() {
-                dal.users
-                    .create_user_with_executor(&mut *conn, user_id)
+        .transaction(|dal, conn| {
+            Box::pin(async move {
+                let existing_user = dal
+                    .users
+                    .find_by_id_with_executor(&mut *conn, user_id)
                     .await?;
 
-                dal.users
-                    .insert_battletag_with_executor(&mut *conn, user_id, &bnet_user.battletag)
-                    .await?;
-            } else {
-                let battletag_exists = dal.users
-                    .battletag_exists_with_executor(&mut *conn, user_id, &bnet_user.battletag)
-                    .await?;
+                if existing_user.is_none() {
+                    dal.users
+                        .create_user_with_executor(&mut *conn, user_id)
+                        .await?;
 
-                if !battletag_exists {
                     dal.users
                         .insert_battletag_with_executor(&mut *conn, user_id, &bnet_user.battletag)
                         .await?;
-
-                    dal.users
-                        .touch_updated_at_with_executor(&mut *conn, user_id)
+                } else {
+                    let battletag_exists = dal
+                        .users
+                        .battletag_exists_with_executor(&mut *conn, user_id, &bnet_user.battletag)
                         .await?;
-                }
-            }
 
-            Ok::<_, sqlx::Error>((existing_user, bnet_user.battletag.clone()))
-        }))
+                    if !battletag_exists {
+                        dal.users
+                            .insert_battletag_with_executor(
+                                &mut *conn,
+                                user_id,
+                                &bnet_user.battletag,
+                            )
+                            .await?;
+
+                        dal.users
+                            .touch_updated_at_with_executor(&mut *conn, user_id)
+                            .await?;
+                    }
+                }
+
+                Ok::<_, sqlx::Error>((existing_user, bnet_user.battletag.clone()))
+            })
+        })
         .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to sync user: {}", e) })?;
+        .map_err(|e| ApiError::InternalError {
+            error: format!("Failed to sync user: {}", e),
+        })?;
 
     let mut roles = vec![UserRole::NormalUser];
-    if existing_user.as_ref().map(|user| user.is_admin).unwrap_or(false) {
+    if existing_user
+        .as_ref()
+        .map(|user| user.is_admin)
+        .unwrap_or(false)
+    {
         roles.push(UserRole::Admin);
     }
 
-    let is_manager = db.tournament_managers
+    let is_manager = db
+        .tournament_managers
         .user_is_manager(user_id)
         .await
-        .map_err(|e| ApiError::InternalError { error: format!("Failed to check tournament manager status for user {}: {}", user_id, e) })?;
+        .map_err(|e| ApiError::InternalError {
+            error: format!(
+                "Failed to check tournament manager status for user {}: {}",
+                user_id, e
+            ),
+        })?;
     if is_manager {
         roles.push(UserRole::TournamentManager);
     }

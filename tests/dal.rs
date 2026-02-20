@@ -1,9 +1,9 @@
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 use ow2_tournament_be::dal::{
-    HeroesRepo, MatchesRepo, PlayersRepo, RegistrationsRepo, RegistrationStatus, RoleValue,
-    TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo, NewRegistration, ActionStatus,
+    ActionStatus, HeroesRepo, MatchesRepo, NewRegistration, PlayersRepo, RegistrationStatus,
+    RegistrationsRepo, RoleValue, TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo,
 };
 
 struct TestDb {
@@ -99,14 +99,12 @@ async fn insert_user_with_battletag(pool: &SqlitePool, user_id: i64, battletag: 
         .await
         .expect("insert user");
 
-    sqlx::query(
-        r#"INSERT INTO user_battletags (user_id, battletag) VALUES (?1, ?2)"#,
-    )
-    .bind(user_id)
-    .bind(battletag)
-    .execute(pool)
-    .await
-    .expect("insert battletag");
+    sqlx::query(r#"INSERT INTO user_battletags (user_id, battletag) VALUES (?1, ?2)"#)
+        .bind(user_id)
+        .bind(battletag)
+        .execute(pool)
+        .await
+        .expect("insert battletag");
 
     sqlx::query_scalar("SELECT last_insert_rowid()")
         .fetch_one(pool)
@@ -255,14 +253,12 @@ async fn teams_and_players_repo_lookup() {
     )
     .await;
 
-    sqlx::query(
-        r#"INSERT INTO teams (tournament_id, name) VALUES (?1, ?2)"#,
-    )
-    .bind(tournament_id)
-    .bind("Team Alpha")
-    .execute(&db.pool)
-    .await
-    .expect("insert team");
+    sqlx::query(r#"INSERT INTO teams (tournament_id, name) VALUES (?1, ?2)"#)
+        .bind(tournament_id)
+        .bind("Team Alpha")
+        .execute(&db.pool)
+        .await
+        .expect("insert team");
 
     let team = teams_repo
         .get_by_tournament_and_name(&tournament_id, "Team Alpha")
@@ -415,14 +411,12 @@ async fn tournament_managers_repo_queries() {
         .await
         .expect("insert user");
 
-    sqlx::query(
-        r#"INSERT INTO tournament_managers (tournament_id, user_id) VALUES (?1, ?2)"#,
-    )
-    .bind(tournament_id)
-    .bind(99)
-    .execute(&db.pool)
-    .await
-    .expect("insert manager");
+    sqlx::query(r#"INSERT INTO tournament_managers (tournament_id, user_id) VALUES (?1, ?2)"#)
+        .bind(tournament_id)
+        .bind(99)
+        .execute(&db.pool)
+        .await
+        .expect("insert manager");
 
     let user_battletag_id = insert_user_with_battletag(&db.pool, 100, "User#2222").await;
     let registration_id =

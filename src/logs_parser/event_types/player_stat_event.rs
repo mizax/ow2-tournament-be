@@ -1,6 +1,6 @@
-use serde::Serialize;
-use chrono::NaiveTime;
 use super::BaseLogEvent;
+use chrono::NaiveTime;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PlayerStatEvent {

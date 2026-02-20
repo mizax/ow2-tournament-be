@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use actix_web::{App, web};
 use actix_web::test;
+use actix_web::{App, web};
 use serde_json::Value;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 use ow2_tournament_be::api;
 use ow2_tournament_be::dal::dal::Dal;

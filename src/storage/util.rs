@@ -10,7 +10,7 @@ pub fn compose_sharded_path(random_part: &str, shard_levels: usize, shard_chars:
             sharded_path.push('/');
         }
     }
-    
+
     sharded_path
 }
 

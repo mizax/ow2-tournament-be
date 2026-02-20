@@ -1,6 +1,6 @@
 use crate::dal::Dal;
 use crate::logs_parser::{events_parser, saver};
-use actix_web::{post, web, HttpResponse, Responder, Result};
+use actix_web::{HttpResponse, Responder, Result, post, web};
 use log::error;
 use std::sync::Arc;
 
@@ -16,10 +16,7 @@ async fn load_log(
         .await
         .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?
         .ok_or_else(|| {
-            actix_web::error::ErrorNotFound(format!(
-                "Match with id {} not found",
-                match_id
-            ))
+            actix_web::error::ErrorNotFound(format!("Match with id {} not found", match_id))
         })?;
 
     let csv = String::from_utf8(body.to_vec())
@@ -40,8 +37,7 @@ async fn load_log(
             saver::SaveError::PlayerNotFound(team, player) => {
                 actix_web::error::ErrorBadRequest(format!(
                     "Игрок с ником \"{}\" не найден в команде \"{}\"",
-                    player,
-                    team,
+                    player, team,
                 ))
             }
             other => {

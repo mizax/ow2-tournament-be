@@ -66,7 +66,9 @@ pub async fn get_registration(
                 user_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -81,7 +83,9 @@ pub async fn get_registration(
                 registration_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -96,7 +100,9 @@ pub async fn get_registration(
                 registration_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -116,7 +122,9 @@ pub async fn get_registration(
                     registration_id,
                     e
                 );
-                ApiError::InternalError { error: e.to_string() }
+                ApiError::InternalError {
+                    error: e.to_string(),
+                }
             })?
     } else {
         None

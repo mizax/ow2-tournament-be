@@ -21,7 +21,8 @@ impl TournamentManagersRepo {
     }
 
     pub async fn user_is_manager(&self, user_id: i64) -> Result<bool, sqlx::Error> {
-        self.user_is_manager_with_executor(&self.pool, user_id).await
+        self.user_is_manager_with_executor(&self.pool, user_id)
+            .await
     }
 
     pub async fn user_is_manager_with_executor<'e, E>(

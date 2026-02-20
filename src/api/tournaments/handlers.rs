@@ -14,7 +14,9 @@ pub async fn get_tournaments(
 ) -> actix_web::Result<impl Responder, ApiError> {
     let rows = db.tournaments.list_short().await.map_err(|e| {
         log::error!("Failed to load tournaments: {}", e);
-        ApiError::InternalError { error: e.to_string() }
+        ApiError::InternalError {
+            error: e.to_string(),
+        }
     })?;
 
     let tournaments = rows
@@ -39,14 +41,16 @@ pub async fn get_tournament(
     sef_uri: web::Path<String>,
 ) -> actix_web::Result<impl Responder, ApiError> {
     let sef_uri = sef_uri.into_inner();
-    
+
     let row = db
         .tournaments
         .get_by_sef_title(&sef_uri)
         .await
         .map_err(|e| {
             log::error!("Failed to load tournament {}: {}", sef_uri, e);
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -90,7 +94,9 @@ pub async fn get_tournament_registrations(
         .await
         .map_err(|e| {
             log::error!("Failed to load tournament id for {}: {}", sef_uri, e);
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -104,7 +110,9 @@ pub async fn get_tournament_registrations(
                 sef_uri,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     let response = rows

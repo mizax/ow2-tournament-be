@@ -23,7 +23,12 @@ impl OAuthStateStore {
 
     pub fn add_state(&self, state: String) {
         let mut states = self.states.lock().unwrap();
-        states.insert(state, StateMetadata { inserted_at: Instant::now() });
+        states.insert(
+            state,
+            StateMetadata {
+                inserted_at: Instant::now(),
+            },
+        );
 
         // Clean up expired states
         states.retain(|_, metadata| metadata.inserted_at.elapsed() < self.expiration);

@@ -1,8 +1,8 @@
-use actix_web::{error, HttpResponse};
-use actix_web::http::header::ContentType;
-use actix_web::http::StatusCode;
-use thiserror::Error as ThisError;
 use crate::error::AppError;
+use actix_web::http::StatusCode;
+use actix_web::http::header::ContentType;
+use actix_web::{HttpResponse, error};
+use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum ApiError {
@@ -34,30 +34,30 @@ impl error::ResponseError for ApiError {
             ApiError::InternalError { error } => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
-                        "error": error,
-                    })),
+                    "error": error,
+                })),
             ApiError::BadRequest { error, details } => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
-                        "error": error,
-                        "details": details,
-                    })),
+                    "error": error,
+                    "details": details,
+                })),
             ApiError::ValidationError { errors } => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
-                        "error": "validation_error",
-                        "errors": errors,
-                    })),
+                    "error": "validation_error",
+                    "errors": errors,
+                })),
             ApiError::Forbidden => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
-                        "error": "forbidden",
-                    })),
+                    "error": "forbidden",
+                })),
             ApiError::NotFound => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
-                        "error": "Not Found",
-                    })),
+                    "error": "Not Found",
+                })),
         }
     }
 }
@@ -65,7 +65,9 @@ impl error::ResponseError for ApiError {
 impl From<AppError> for ApiError {
     fn from(value: AppError) -> Self {
         match value {
-            _ => ApiError::InternalError { error: "Internal error".to_string() },
+            _ => ApiError::InternalError {
+                error: "Internal error".to_string(),
+            },
         }
     }
 }
