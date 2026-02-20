@@ -1,4 +1,4 @@
-use actix_web::{get, patch, post, web, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, get, patch, post, web};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -6,8 +6,11 @@ use std::sync::Arc;
 
 use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
+use crate::api::geoip::{GeoIpInfo, GeoIpService};
 use crate::dal::{
-    Dal, RegistrationComment, RegistrationRequestedAction, RegistrationRoleRanking, RegistrationRow, RegistrationSortField, RegistrationStatus, RegistrationSummary, RoleValue, SortDirection
+    Dal, RegistrationComment, RegistrationRequestedAction, RegistrationRoleRanking,
+    RegistrationRow, RegistrationSortField, RegistrationStatus, RegistrationSummary, RoleValue,
+    SortDirection,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +29,7 @@ pub struct ManagerRegistration {
     pub additional_info: String,
     pub rules_accepted: bool,
     pub ip_address: String,
+    pub geo_ip: Option<GeoIpInfo>,
     pub user_agent: String,
     pub decline_reason: Option<String>,
     pub created_at: NaiveDateTime,
@@ -124,7 +128,9 @@ pub async fn list_registrations(
                 query.tournament_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     if !is_manager {
@@ -161,7 +167,9 @@ pub async fn list_registrations(
                 query.tournament_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     let registrations = db
@@ -182,7 +190,9 @@ pub async fn list_registrations(
                 query.tournament_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     Ok(HttpResponse::Ok().json(RegistrationListResponse {
@@ -197,6 +207,7 @@ pub async fn list_registrations(
 pub async fn get_registration(
     user: AuthenticatedUser,
     db: web::Data<Arc<Dal>>,
+    geo_ip_service: web::Data<GeoIpService>,
     registration_id: web::Path<i64>,
 ) -> actix_web::Result<impl Responder, ApiError> {
     let user_id = user.id.parse::<i64>().map_err(|_| ApiError::BadRequest {
@@ -215,11 +226,14 @@ pub async fn get_registration(
         .await
         .map_err(|e| {
             log::error!("Failed to load registration {}: {}", registration_id, e);
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
-    let registration = map_registration(detail.registration)?;
+    let mut registration = map_registration(detail.registration)?;
+    registration.geo_ip = geo_ip_service.lookup_ip(&registration.ip_address).await;
 
     Ok(HttpResponse::Ok().json(RegistrationDetailResponse {
         registration,
@@ -264,7 +278,9 @@ pub async fn add_comment(
                 registration_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     Ok(HttpResponse::Ok().json(comment))
@@ -274,6 +290,7 @@ pub async fn add_comment(
 pub async fn update_status(
     user: AuthenticatedUser,
     db: web::Data<Arc<Dal>>,
+    geo_ip_service: web::Data<GeoIpService>,
     registration_id: web::Path<i64>,
     payload: web::Json<UpdateRegistrationStatusRequest>,
 ) -> actix_web::Result<impl Responder, ApiError> {
@@ -315,7 +332,10 @@ pub async fn update_status(
     }
 
     let decline_reason = if payload.status == RegistrationStatus::Declined {
-        payload.decline_reason.as_ref().map(|value| value.trim().to_string())
+        payload
+            .decline_reason
+            .as_ref()
+            .map(|value| value.trim().to_string())
     } else {
         None
     };
@@ -329,8 +349,7 @@ pub async fn update_status(
         None
     };
 
-    db
-        .registrations
+    db.registrations
         .update_status_with_action(
             registration_id,
             payload.status,
@@ -341,7 +360,9 @@ pub async fn update_status(
         .await
         .map_err(|e| {
             log::error!("Failed to update registration {}: {}", registration_id, e);
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     let detail = db
@@ -349,12 +370,19 @@ pub async fn update_status(
         .get_manager_detail(registration_id)
         .await
         .map_err(|e| {
-            log::error!("Failed to load updated registration {}: {}", registration_id, e);
-            ApiError::InternalError { error: e.to_string() }
+            log::error!(
+                "Failed to load updated registration {}: {}",
+                registration_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
-    let registration = map_registration(detail.registration)?;
+    let mut registration = map_registration(detail.registration)?;
+    registration.geo_ip = geo_ip_service.lookup_ip(&registration.ip_address).await;
 
     Ok(HttpResponse::Ok().json(RegistrationDetailResponse {
         registration,
@@ -414,7 +442,9 @@ pub async fn update_role_rankings(
                 registration_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?;
 
     Ok(HttpResponse::Ok().json(updated))
@@ -447,7 +477,9 @@ pub async fn resolve_action(
                 registration_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })?
         .ok_or(ApiError::NotFound)?;
 
@@ -469,7 +501,9 @@ async fn is_manager_for_registration(
                 registration_id,
                 e
             );
-            ApiError::InternalError { error: e.to_string() }
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
         })
 }
 
@@ -486,7 +520,7 @@ fn parse_sort(sort: Option<&str>) -> Result<(RegistrationSortField, SortDirectio
             return Err(ApiError::BadRequest {
                 error: "Invalid sort".to_string(),
                 details: "Sort field must be created_at or updated_at.".to_string(),
-            })
+            });
         }
     };
 
@@ -497,7 +531,7 @@ fn parse_sort(sort: Option<&str>) -> Result<(RegistrationSortField, SortDirectio
             return Err(ApiError::BadRequest {
                 error: "Invalid sort".to_string(),
                 details: "Sort direction must be asc or desc.".to_string(),
-            })
+            });
         }
     };
 
@@ -519,7 +553,7 @@ fn parse_statuses(statuses: &str) -> Result<Vec<RegistrationStatus>, ApiError> {
                 return Err(ApiError::BadRequest {
                     error: "Invalid status".to_string(),
                     details: format!("Unsupported status value: {}", raw),
-                })
+                });
             }
         };
         parsed.push(status);
@@ -547,6 +581,7 @@ fn map_registration(row: RegistrationRow) -> Result<ManagerRegistration, ApiErro
         additional_info: row.additional_info,
         rules_accepted: row.rules_accepted,
         ip_address: row.ip_address,
+        geo_ip: None,
         user_agent: row.user_agent,
         decline_reason: row.decline_reason,
         created_at: row.created_at,
@@ -558,7 +593,9 @@ fn map_registration(row: RegistrationRow) -> Result<ManagerRegistration, ApiErro
 fn parse_optional_list(payload: &str) -> Result<Option<Vec<String>>, ApiError> {
     let items: Vec<String> = serde_json::from_str(payload).map_err(|e| {
         log::error!("Failed to parse registration list payload: {}", e);
-        ApiError::InternalError { error: e.to_string() }
+        ApiError::InternalError {
+            error: e.to_string(),
+        }
     })?;
     if items.is_empty() {
         Ok(None)

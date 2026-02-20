@@ -1,7 +1,7 @@
+use crate::storage::StorageConfig;
 pub use ::config::ConfigError;
 use serde::Deserialize;
 use sqlx::sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode};
-use crate::storage::StorageConfig;
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
@@ -9,6 +9,8 @@ pub struct Config {
     pub actix_workers: usize,
     pub sqlite: CustomSqliteConnectOptions,
     pub app: App,
+    #[serde(default = "default_geoip_enabled")]
+    pub geoip_enabled: bool,
     #[serde(default = "default_storage_config")]
     pub storage: StorageConfig,
     pub battlenet: BattleNetConfig,
@@ -34,11 +36,10 @@ pub struct App {
 
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
-        let builder = config::Config::builder()
-            .add_source(config::Environment::default());
+        let builder = config::Config::builder().add_source(config::Environment::default());
         match builder.build() {
             Ok(cfg) => cfg.try_deserialize(),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 }
@@ -53,13 +54,11 @@ impl TryInto<SqliteConnectOptions> for CustomSqliteConnectOptions {
     type Error = ();
 
     fn try_into(self) -> Result<SqliteConnectOptions, Self::Error> {
-        Ok(
-            SqliteConnectOptions::new()
-                .journal_mode(SqliteJournalMode::Wal)
-                .auto_vacuum(SqliteAutoVacuum::Incremental)
-                .filename(self.filename)
-                .extension(self.text_extension)
-        )
+        Ok(SqliteConnectOptions::new()
+            .journal_mode(SqliteJournalMode::Wal)
+            .auto_vacuum(SqliteAutoVacuum::Incremental)
+            .filename(self.filename)
+            .extension(self.text_extension))
     }
 }
 
@@ -70,4 +69,8 @@ fn default_storage_config() -> StorageConfig {
         shard_chars: None,
         serve_url: None,
     }
+}
+
+fn default_geoip_enabled() -> bool {
+    true
 }

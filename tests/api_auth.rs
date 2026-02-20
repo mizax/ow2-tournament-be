@@ -1,17 +1,19 @@
 use std::sync::Arc;
 
-use actix_web::{App, web};
 use actix_web::test;
-use httpmock::Method::POST;
+use actix_web::{App, web};
 use httpmock::Method::GET;
+use httpmock::Method::POST;
 use httpmock::MockServer;
 use serde_json::Value;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 use ow2_tournament_be::api;
 use ow2_tournament_be::api::auth::state_store::OAuthStateStore;
-use ow2_tournament_be::config::{App as AppConfig, BattleNetConfig, Config, CustomSqliteConnectOptions};
+use ow2_tournament_be::config::{
+    App as AppConfig, BattleNetConfig, Config, CustomSqliteConnectOptions,
+};
 use ow2_tournament_be::dal::dal::Dal;
 use ow2_tournament_be::storage::StorageConfig;
 
@@ -55,6 +57,7 @@ fn build_config() -> Config {
             main_host: "https://main.example".to_string(),
             alt_host: "https://alt.example".to_string(),
         },
+        geoip_enabled: true,
         storage: StorageConfig::FileSystem {
             root_dir: "./storage".to_string(),
             shard_levels: None,
@@ -98,7 +101,9 @@ async fn auth_battlenet_returns_auth_url() {
     let body: Value = test::read_body_json(resp).await;
     let auth_url = body["auth_url"].as_str().expect("auth_url");
     assert!(auth_url.starts_with("https://oauth.battle.net/authorize?"));
-    assert!(auth_url.contains("redirect_uri=https%3A%2F%2Fmain.example%2Fapi%2Fpublic%2Fv1%2Fauth%2Fbattlenet%2Fcallback"));
+    assert!(auth_url.contains(
+        "redirect_uri=https%3A%2F%2Fmain.example%2Fapi%2Fpublic%2Fv1%2Fauth%2Fbattlenet%2Fcallback"
+    ));
 }
 
 #[actix_web::test]
@@ -194,7 +199,10 @@ async fn auth_battlenet_callback_success_creates_user() {
     .await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .uri(&format!(
+            "/api/public/v1/auth/battlenet/callback?code=abc&state={}",
+            state
+        ))
         .insert_header(("host", "main.example"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -261,7 +269,10 @@ async fn auth_battlenet_callback_token_non_200_returns_500() {
     .await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .uri(&format!(
+            "/api/public/v1/auth/battlenet/callback?code=abc&state={}",
+            state
+        ))
         .insert_header(("host", "main.example"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -298,7 +309,10 @@ async fn auth_battlenet_callback_token_invalid_json_returns_500() {
     .await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .uri(&format!(
+            "/api/public/v1/auth/battlenet/callback?code=abc&state={}",
+            state
+        ))
         .insert_header(("host", "main.example"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -347,7 +361,10 @@ async fn auth_battlenet_callback_userinfo_non_200_returns_500() {
     .await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .uri(&format!(
+            "/api/public/v1/auth/battlenet/callback?code=abc&state={}",
+            state
+        ))
         .insert_header(("host", "main.example"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -396,7 +413,10 @@ async fn auth_battlenet_callback_userinfo_invalid_json_returns_500() {
     .await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/api/public/v1/auth/battlenet/callback?code=abc&state={}", state))
+        .uri(&format!(
+            "/api/public/v1/auth/battlenet/callback?code=abc&state={}",
+            state
+        ))
         .insert_header(("host", "main.example"))
         .to_request();
     let resp = test::call_service(&app, req).await;
