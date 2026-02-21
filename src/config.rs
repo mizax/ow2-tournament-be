@@ -14,6 +14,8 @@ pub struct Config {
     #[serde(default = "default_storage_config")]
     pub storage: StorageConfig,
     pub battlenet: BattleNetConfig,
+    #[serde(default)]
+    pub twitch: TwitchConfig,
 }
 
 #[derive(Deserialize, Clone)]
@@ -26,6 +28,12 @@ pub struct BattleNetConfig {
     pub token_url: Option<String>,
     #[serde(default)]
     pub userinfo_url: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Default)]
+pub struct TwitchConfig {
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]

@@ -111,6 +111,11 @@ pub struct PublicRegistrationSummary {
     pub primary_role: Option<RoleValue>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct PublicRegistrationTwitch {
+    pub twitch: String,
+}
+
 pub struct RegistrationManagerDetail {
     pub registration: RegistrationRow,
     pub battletag: String,
@@ -646,6 +651,37 @@ impl RegistrationsRepo {
         .bind(tournament_id)
         .bind(RegistrationStatus::Declined)
         .bind(RegistrationStatus::Deleted)
+        .fetch_all(executor)
+        .await
+    }
+
+    pub async fn list_public_twitch_logins(
+        &self,
+        tournament_id: i64,
+    ) -> Result<Vec<PublicRegistrationTwitch>, sqlx::Error> {
+        self.list_public_twitch_logins_with_executor(&self.pool, tournament_id)
+            .await
+    }
+
+    pub async fn list_public_twitch_logins_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+    ) -> Result<Vec<PublicRegistrationTwitch>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
+        sqlx::query_as::<_, PublicRegistrationTwitch>(
+            r#"
+            SELECT
+                r.twitch
+            FROM registrations r
+            WHERE r.tournament_id = ?1
+              AND r.status = ?2
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(RegistrationStatus::Accepted)
         .fetch_all(executor)
         .await
     }

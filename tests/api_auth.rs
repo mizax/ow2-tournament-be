@@ -12,7 +12,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use ow2_tournament_be::api;
 use ow2_tournament_be::api::auth::state_store::OAuthStateStore;
 use ow2_tournament_be::config::{
-    App as AppConfig, BattleNetConfig, Config, CustomSqliteConnectOptions,
+    App as AppConfig, BattleNetConfig, Config, CustomSqliteConnectOptions, TwitchConfig,
 };
 use ow2_tournament_be::dal::dal::Dal;
 use ow2_tournament_be::storage::StorageConfig;
@@ -72,6 +72,7 @@ fn build_config() -> Config {
             token_url: None,
             userinfo_url: None,
         },
+        twitch: TwitchConfig::default(),
     }
 }
 

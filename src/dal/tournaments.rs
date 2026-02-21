@@ -37,6 +37,11 @@ pub struct TournamentDetailsData {
     pub config: TournamentConfig,
 }
 
+pub struct TournamentIdDatesData {
+    pub id: i64,
+    pub dates: Vec<String>,
+}
+
 #[derive(sqlx::FromRow)]
 struct TournamentShortRow {
     pub id: i64,
@@ -58,6 +63,12 @@ struct TournamentConfigRow {
     pub discipline: String,
     pub format: String,
     pub configuration_json: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct TournamentIdDatesRow {
+    pub id: i64,
+    pub dates_json: String,
 }
 
 impl TournamentsRepo {
@@ -150,6 +161,45 @@ impl TournamentsRepo {
         .bind(sef_title)
         .fetch_optional(executor)
         .await
+    }
+
+    pub async fn get_id_and_dates_by_sef_title(
+        &self,
+        sef_title: &str,
+    ) -> Result<Option<TournamentIdDatesData>, TournamentsRepoError> {
+        self.get_id_and_dates_by_sef_title_with_executor(&self.pool, sef_title)
+            .await
+    }
+
+    pub async fn get_id_and_dates_by_sef_title_with_executor<'e, E>(
+        &self,
+        executor: E,
+        sef_title: &str,
+    ) -> Result<Option<TournamentIdDatesData>, TournamentsRepoError>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
+        let row = sqlx::query_as::<_, TournamentIdDatesRow>(
+            r#"
+            SELECT
+                id,
+                dates_json
+            FROM tournaments
+            WHERE sef_title = ?1
+            LIMIT 1
+            "#,
+        )
+        .bind(sef_title)
+        .fetch_optional(executor)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let dates: Vec<String> = serde_json::from_str(&row.dates_json)?;
+
+        Ok(Some(TournamentIdDatesData { id: row.id, dates }))
     }
 
     pub async fn get_by_sef_title(
