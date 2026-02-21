@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
-use crate::api::geoip::{GeoIpInfo, GeoIpService};
 use crate::dal::{
     Dal, RegistrationComment, RegistrationRequestedAction, RegistrationRoleRanking,
     RegistrationRow, RegistrationSortField, RegistrationStatus, RegistrationSummary, RoleValue,
     SortDirection,
 };
+use crate::services::{GeoIpInfo, GeoIpService};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagerRegistration {

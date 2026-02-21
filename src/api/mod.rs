@@ -1,6 +1,5 @@
 pub mod auth;
 mod error;
-pub mod geoip;
 mod logs;
 mod manager;
 mod registrations;
@@ -8,6 +7,8 @@ mod tournaments;
 mod user;
 
 use actix_web::web;
+
+pub use error::ApiError;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
