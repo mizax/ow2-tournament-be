@@ -3,41 +3,48 @@ name = "ow2-tournament-be"
 version = "0.1.0"
 edition = "2024"
 
-[target.aarch64-unknown-linux-gnu]
-linker = "aarch64-unknown-linux-gnu-gcc"
-
 [dependencies]
-log = "0.4.27"
+log = "0.4.29"
 pretty_env_logger = "0.5.0"
-tokio = { version =  "1.45.1", features = ["full"] }
-actix-web = "4.11.0"
-config = "0.15.11"
+tokio = { version = "1.49.0", features = ["full"] }
+actix-web = "4.13.0"
+config = "0.15.19"
 dotenv = "0.15.0"
-sqlx = { version = "0.8.6", features = ["sqlite", "chrono", "runtime-tokio", "json"] }
-reqwest = { version = "0.12.18", features = ["json"] }
-openssl = { version = "0.10.73", features = ["vendored"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-serde_with = { version = "3.12.0", features = ["chrono"] }
-thiserror = "2.0.12"
-rand = "0.9.0"
-futures-util = "0.3.31"
+sqlx = { version = "0.8.6", features = [
+    "sqlite",
+    "chrono",
+    "runtime-tokio",
+    "json",
+] }
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "json",
+    "form",
+    "query",
+    "native-tls-vendored",
+] }
+openssl = { version = "0.10.75", features = ["vendored"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+serde_with = { version = "3.16.1", features = ["chrono"] }
+thiserror = "2.0.18"
+rand = "0.10.0"
+futures-util = "0.3.32"
 serde_urlencoded = "0.7.1"
-serde_qs = { version = "1.0.0-rc.3", features = ["actix4"] }
-strum = "0.27.1"
-strum_macros = "0.27.1"
-jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+serde_qs = { version = "1.0.0", features = ["actix4"] }
+strum = "0.27.2"
+strum_macros = "0.27.2"
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 base64 = "0.22.1"
-chrono = "0.4.31"
-async-trait = "0.1.88"
+chrono = "0.4.43"
+async-trait = "0.1.89"
 actix-multipart = "0.7.2"
 ulid = { version = "1.2.1", features = ["serde"] }
-tokio-cron-scheduler = { version = "0.14.0", features = ["signal"] }
-mime_guess = "2.0.4"
+tokio-cron-scheduler = { version = "0.15.1", features = ["signal"] }
+mime_guess = "2.0.5"
 csv = "1.4.0"
 enum_dispatch = "0.3.13"
 tracing = "0.1.44"
 
 [dev-dependencies]
-tempfile = "3.10.1"
-httpmock = "0.7.0"
+tempfile = "3.25.0"
+httpmock = "0.8.3"

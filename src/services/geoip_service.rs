@@ -454,7 +454,7 @@ mod tests {
 
         assert!(first.is_some());
         assert!(second.is_some());
-        assert_eq!(provider_mock.hits_async().await, 1);
+        assert_eq!(provider_mock.calls_async().await, 1);
     }
 
     #[tokio::test]
@@ -474,6 +474,6 @@ mod tests {
 
         assert!(first.is_none());
         assert!(second.is_none());
-        assert_eq!(provider_mock.hits_async().await, 1);
+        assert_eq!(provider_mock.calls_async().await, 1);
     }
 }

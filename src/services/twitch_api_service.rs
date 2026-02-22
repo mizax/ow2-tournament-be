@@ -403,8 +403,8 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].user_login, "player1");
 
-        assert_eq!(token_refresh_mock.hits_async().await, 1);
-        assert_eq!(streams_unauthorized_mock.hits_async().await, 1);
-        assert_eq!(streams_success_mock.hits_async().await, 1);
+        assert_eq!(token_refresh_mock.calls_async().await, 1);
+        assert_eq!(streams_unauthorized_mock.calls_async().await, 1);
+        assert_eq!(streams_success_mock.calls_async().await, 1);
     }
 }

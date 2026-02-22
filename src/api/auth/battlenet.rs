@@ -4,7 +4,7 @@ use crate::api::error::ApiError;
 use crate::config::Config;
 use crate::dal::Dal;
 use actix_web::{HttpResponse, Responder, Result, get, web};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
