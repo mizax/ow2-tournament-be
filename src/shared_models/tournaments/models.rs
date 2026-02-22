@@ -89,6 +89,34 @@ pub struct Stream {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TournamentStatus {
+    Upcoming,
+    Ongoing,
+    Finished,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TournamentResultPlace {
+    pub place: i32,
+    pub team_name: String,
+    pub captain_battletag: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TournamentResults {
+    pub placements: Option<Vec<TournamentResultPlace>>,
+    pub mvp: Option<String>,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TournamentMedia {
+    pub vod_url: Option<String>,
+    pub bracket_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Markdown {
     pub description: Option<String>,
     pub notes: Option<String>,
@@ -112,6 +140,9 @@ pub struct Tournament {
     pub match_format: Option<MatchFormat>,
     pub prize_pool: PrizePool,
     pub stream: Option<Stream>,
+    pub status: Option<TournamentStatus>,
+    pub results: Option<TournamentResults>,
+    pub media: Option<TournamentMedia>,
     pub markdown: Option<Markdown>,
 }
 
@@ -128,6 +159,9 @@ pub struct TournamentConfig {
     pub match_format: Option<MatchFormat>,
     pub prize_pool: PrizePool,
     pub stream: Option<Stream>,
+    pub status: Option<TournamentStatus>,
+    pub results: Option<TournamentResults>,
+    pub media: Option<TournamentMedia>,
     pub markdown: Option<Markdown>,
 }
 
