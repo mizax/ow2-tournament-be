@@ -10,6 +10,43 @@ impl PlayersRepo {
         Self { pool }
     }
 
+    pub async fn find_team_id_by_tournament_and_nickname(
+        &self,
+        tournament_id: i64,
+        nickname: &str,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        self.find_team_id_by_tournament_and_nickname_with_executor(
+            &self.pool,
+            tournament_id,
+            nickname,
+        )
+        .await
+    }
+
+    pub async fn find_team_id_by_tournament_and_nickname_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+        nickname: &str,
+    ) -> Result<Option<i64>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT p.team_id
+            FROM players p
+            JOIN teams t ON t.id = p.team_id
+            WHERE t.tournament_id = ?1 AND p.nickname = ?2
+            LIMIT 1
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(nickname)
+        .fetch_optional(executor)
+        .await
+    }
+
     pub async fn find_id_by_team_and_nickname(
         &self,
         team_id: i64,

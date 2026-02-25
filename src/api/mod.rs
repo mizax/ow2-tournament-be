@@ -2,6 +2,8 @@ pub mod auth;
 mod error;
 mod logs;
 mod manager;
+mod matches;
+mod players;
 mod registrations;
 mod tournaments;
 mod user;
@@ -22,7 +24,9 @@ fn configure_public(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/public/v1")
             .configure(auth::configure)
-            .configure(tournaments::configure_public),
+            .configure(tournaments::configure_public)
+            .configure(matches::configure)
+            .configure(players::configure),
     );
 }
 

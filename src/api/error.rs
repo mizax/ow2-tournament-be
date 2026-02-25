@@ -10,6 +10,8 @@ pub enum ApiError {
     InternalError { error: String },
     #[error("Bad request: {error}")]
     BadRequest { error: String, details: String },
+    #[error("Conflict: {error}")]
+    Conflict { error: String, details: String },
     #[error("Validation error")]
     ValidationError { errors: Vec<String> },
     #[error("Forbidden")]
@@ -23,6 +25,7 @@ impl error::ResponseError for ApiError {
         match *self {
             ApiError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            ApiError::Conflict { .. } => StatusCode::CONFLICT,
             ApiError::ValidationError { .. } => StatusCode::BAD_REQUEST,
             ApiError::Forbidden => StatusCode::FORBIDDEN,
             ApiError::NotFound => StatusCode::NOT_FOUND,
@@ -37,6 +40,12 @@ impl error::ResponseError for ApiError {
                     "error": error,
                 })),
             ApiError::BadRequest { error, details } => HttpResponse::build(self.status_code())
+                .insert_header(ContentType::json())
+                .json(serde_json::json!({
+                    "error": error,
+                    "details": details,
+                })),
+            ApiError::Conflict { error, details } => HttpResponse::build(self.status_code())
                 .insert_header(ContentType::json())
                 .json(serde_json::json!({
                     "error": error,

@@ -2,6 +2,7 @@
 pub struct Dal {
     pub(crate) db_pool: Pool<Sqlite>,
     pub matches: MatchesRepo,
+    pub match_maps: MatchMapsRepo,
     pub teams: TeamsRepo,
     pub players: PlayersRepo,
     pub heroes: HeroesRepo,
@@ -17,8 +18,8 @@ use futures_util::future::BoxFuture;
 use sqlx::{Pool, Sqlite, SqlitePool};
 
 use crate::dal::{
-    HeroesRepo, MatchEventsRepo, MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo,
-    RegistrationsRepo, TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo,
+    HeroesRepo, MatchEventsRepo, MatchMapsRepo, MatchPlayerStatisticsRepo, MatchesRepo,
+    PlayersRepo, RegistrationsRepo, TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo,
 };
 
 impl Dal {
@@ -35,6 +36,7 @@ impl Dal {
             .expect("db initialization failed");
         Dal {
             matches: MatchesRepo::new(db_pool.clone()),
+            match_maps: MatchMapsRepo::new(db_pool.clone()),
             teams: TeamsRepo::new(db_pool.clone()),
             players: PlayersRepo::new(db_pool.clone()),
             heroes: HeroesRepo::new(db_pool.clone()),
@@ -51,6 +53,7 @@ impl Dal {
     pub fn from_pool(db_pool: Pool<Sqlite>) -> Self {
         Dal {
             matches: MatchesRepo::new(db_pool.clone()),
+            match_maps: MatchMapsRepo::new(db_pool.clone()),
             teams: TeamsRepo::new(db_pool.clone()),
             players: PlayersRepo::new(db_pool.clone()),
             heroes: HeroesRepo::new(db_pool.clone()),

@@ -1,0 +1,1227 @@
+variables
+{
+	global:
+		0: _ultSaverTeam1Hero_Keys
+		1: _ultSaverTeam1Hero_Values
+		2: _ultSaverTeam2Hero_Keys
+		3: _ultSaverTeam2Hero_Values
+		4: _ultSaverTeam1Charge_Keys
+		5: _ultSaverTeam1Charge_Values
+		6: _ultSaverTeam2Charge_Keys
+		7: _ultSaverTeam2Charge_Values
+		8: LANGUAGE_SAMPLES
+		9: LANGUAGES
+		10: Scrim_MatchTime
+		11: Logs_EnableLogTracker
+		12: Logs_OutputFormat
+		13: Logs_CurrentObjectiveIndex
+		14: Logs_CurrentControlScoringTeam
+		16: Logs_TrackHeroSwaps
+		17: Logs_TrackObjectiveCapture
+		18: Logs_PointCaptureProgressStep
+		19: Logs_PayloadCaptureProgressStep
+		20: Logs_PointCaptureProgress
+		21: Logs_PayloadCaptureProgress
+		23: Logs_TrackUltimates
+		28: Logs_TrackDvaDemechs
+		30: Logs_TrackRoundStartEnd
+		31: Logs_TrackMatchStartEnd
+		32: Logs_PlayerSummaryFrequency
+		33: Logs_PlayerSummaryCount
+
+	player:
+		0: Logs_LastHero
+		1: Logs_LastHeroTime
+		2: Logs_HeroesPlayedTimeArray
+		3: Logs_HeroesPlayedArray
+		4: Logs_OffensiveAssists
+		5: Logs_DefensiveAssists
+		6: Logs_CurrentHeroIterator
+		7: Logs_CurrentHeroIterated
+		8: Logs_UltimateID
+		9: Logs_DuplicateID
+		10: Meta_playerName
+		11: Meta_playerLanguage
+		12: Ult_isPlayerReconnecting
+		13: Ult_reconnectingPlayerChargePerc
+		14: Logs_isShattered
+		15: Logs_isFluxed
+		16: Logs_isHooked
+		17: Logs_hookedFromDistance
+		18: hookedPlayer
+		19: key
+		20: key_0
+		21: key_1
+		22: key_2
+		23: key_3
+		24: key_4
+		25: key_5
+		26: key_6
+		27: index
+		28: index_0
+		29: key_7
+		30: key_8
+		31: index_1
+		32: index_2
+		33: index_3
+		34: index_4
+		35: returnValue_CalculateJunosHealin
+		36: playerHealingDealt
+		37: hero
+}
+
+subroutines
+{
+	0: ultSaverCleanup
+	1: CalcHeroPlayedTime
+	2: CalculateJunosHealingDealt
+}
+
+rule("Initial Global")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.LANGUAGE_SAMPLES = Array(Custom String("Practice Range"), Custom String("Trainingsbereich"), Custom String(
+			"Práctica de combate"), Custom String("Campo de pruebas"), Custom String("Champ de tir"), Custom String(
+			"Zona d'addestramento"), Custom String("練習場"), Custom String("훈련장"), Custom String("Obszar treningowy"), Custom String(
+			"Campo de Treinamento"), Custom String("УЧЕБНЫЙ ПОЛИГОН"), Custom String("训练靶场"), Custom String("訓練中心"));
+		Global.LANGUAGES = Array(Custom String("en-US"), Custom String("de-DE"), Custom String("es-ES"), Custom String("es-MX"),
+			Custom String("fr-FR"), Custom String("it-IT"), Custom String("ja-JP"), Custom String("ko-KR"), Custom String("pl-PL"),
+			Custom String("pt-BR"), Custom String("ru-RU"), Custom String("zh-CN"), Custom String("zh-TW"));
+	}
+}
+
+rule("Logs: Detect if a player is affected by a chain hook")
+{
+	event
+	{
+		Player took damage;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Event Ability == Button(Ability 1);
+		Hero Of(Attacker) == Hero(Турбосвин);
+	}
+
+	actions
+	{
+		Event Player.Logs_isHooked = True;
+		Event Player.Logs_hookedFromDistance = Distance Between(Attacker, Victim);
+		Wait(2, Ignore Condition);
+		Event Player.Logs_isHooked = False;
+		Event Player.Logs_hookedFromDistance = Null;
+	}
+}
+
+rule("Logs: Track Hog's chain Hook")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Турбосвин;
+	}
+
+	conditions
+	{
+		Is Using Ability 1(Event Player) == True;
+	}
+
+	actions
+	{
+		Wait(1, Ignore Condition);
+		Event Player.hookedPlayer = First Of(Filtered Array(All Players(Opposite Team Of(Team Of(Event Player))),
+			Current Array Element.Logs_isHooked));
+		Log to Inspector(Custom String("{0}{1}", Custom String(",chain_hook,{0},{1},{2}", Global.Scrim_MatchTime, Team Of(Event Player),
+			Event Player), Custom String(",{0},{1}", Event Player.hookedPlayer,
+			Event Player.hookedPlayer != Null ? Event Player.hookedPlayer.Logs_hookedFromDistance : Null)));
+	}
+}
+
+rule("Logs: On gravitic flux detection")
+{
+	event
+	{
+		Player Received Knockback;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Event Ability == Button(Ultimate);
+		Hero Of(Attacker) == Hero(Сигма);
+	}
+
+	actions
+	{
+		Event Player.Logs_isFluxed = True;
+		Wait(2, Ignore Condition);
+		Event Player.Logs_isFluxed = False;
+	}
+}
+
+rule("Logs: Gravitic flux affected count")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Сигма;
+	}
+
+	conditions
+	{
+		Is Using Ultimate(Event Player) == True;
+	}
+
+	actions
+	{
+		Wait Until(Is Button Held(Event Player, Button(Primary Fire)), 6);
+		Abort If(!Is Using Ultimate(Event Player));
+		Wait(1.200, Abort When False);
+		Log to Inspector(Custom String("{0}{1}", Custom String(",gravitic_flux,{0},{1},{2}", Global.Scrim_MatchTime, Team Of(Event Player),
+			Event Player), Custom String(",{0}", Count Of(Filtered Array(All Players(Opposite Team Of(Team Of(Event Player))),
+			Current Array Element.Logs_isFluxed)))));
+	}
+}
+
+rule("Logs: Track server's load")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",server_load,{0},{1},{2}", Server Load, Server Load Average, Server Load Peak));
+		Wait(60, Restart When True);
+		Loop If Condition Is True;
+	}
+}
+
+rule("Logs: Earthshatter affected count")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Райнхардт;
+	}
+
+	conditions
+	{
+		Is Using Ultimate(Event Player) == True;
+	}
+
+	actions
+	{
+		Wait(1, Ignore Condition);
+		Log to Inspector(Custom String("{0}{1}", Custom String(",earthshatter,{0},{1},{2}", Global.Scrim_MatchTime, Team Of(Event Player),
+			Event Player), Custom String(",{0}", Count Of(Filtered Array(All Players(Opposite Team Of(Team Of(Event Player))),
+			Current Array Element.Logs_isShattered)))));
+	}
+}
+
+rule("Logs: On earthshatter impact detection")
+{
+	event
+	{
+		Player took damage;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Hero Of(Attacker) == Hero(Райнхардт);
+		Event Ability == Button(Ultimate);
+	}
+
+	actions
+	{
+		Event Player.Logs_isShattered = True;
+		Wait(2, Ignore Condition);
+		Event Player.Logs_isShattered = False;
+	}
+}
+
+rule("Clean up current heroes and their ultimates data")
+{
+	event
+	{
+		Subroutine;
+		ultSaverCleanup;
+	}
+
+	actions
+	{
+		Global._ultSaverTeam1Hero_Keys = Empty Array;
+		Global._ultSaverTeam1Hero_Values = Empty Array;
+		Global._ultSaverTeam2Hero_Keys = Empty Array;
+		Global._ultSaverTeam2Hero_Values = Empty Array;
+		Global._ultSaverTeam1Charge_Keys = Empty Array;
+		Global._ultSaverTeam1Charge_Values = Empty Array;
+		Global._ultSaverTeam2Charge_Keys = Empty Array;
+		Global._ultSaverTeam2Charge_Values = Empty Array;
+	}
+}
+
+rule("UltSaver: On init cleanup")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Call Subroutine(ultSaverCleanup);
+	}
+}
+
+rule("UltSaver: In between rounds cleanup")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Between Rounds == True;
+	}
+
+	actions
+	{
+		Call Subroutine(ultSaverCleanup);
+	}
+}
+
+rule("UltSaver: On player join set player's name")
+{
+	event
+	{
+		Player Joined Match;
+		All;
+		Все;
+	}
+
+	actions
+	{
+		Event Player.Meta_playerLanguage = Global.LANGUAGES[Index Of Array Value(Global.LANGUAGE_SAMPLES, Custom String("{0}", Map(
+			УЧЕБНЫЙ ПОЛИГОН)))];
+		Event Player.Meta_playerName = Custom String("{0}_{1}", Event Player, Event Player.Meta_playerLanguage);
+	}
+}
+
+rule("UltSaver: On player join recover")
+{
+	event
+	{
+		Player Joined Match;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Is Waiting For Players == False;
+		Is Between Rounds == False;
+	}
+
+	actions
+	{
+		Event Player.key = Event Player.Meta_playerName;
+		Event Player.key_0 = Event Player.Meta_playerName;
+		If(Team Of(Event Player) == Team 1 ? Global._ultSaverTeam1Hero_Values[Index Of Array Value(Global._ultSaverTeam1Hero_Keys,
+			Event Player.key)] : Global._ultSaverTeam2Hero_Values[Index Of Array Value(Global._ultSaverTeam2Hero_Keys, Event Player.key_0)
+			]);
+			Event Player.Ult_isPlayerReconnecting = True;
+			Event Player.key_1 = Event Player.Meta_playerName;
+			Event Player.key_2 = Event Player.Meta_playerName;
+			Event Player.Ult_reconnectingPlayerChargePerc = Team Of(Event Player)
+				== Team 1 ? Global._ultSaverTeam1Charge_Values[Index Of Array Value(Global._ultSaverTeam1Charge_Keys, Event Player.key_1)
+				] : Global._ultSaverTeam2Charge_Values[Index Of Array Value(Global._ultSaverTeam2Charge_Keys, Event Player.key_2)];
+			Event Player.key_3 = Event Player.Meta_playerName;
+			Event Player.key_4 = Event Player.Meta_playerName;
+			Start Forcing Player To Be Hero(Event Player, Team Of(Event Player)
+				== Team 1 ? Global._ultSaverTeam1Hero_Values[Index Of Array Value(Global._ultSaverTeam1Hero_Keys, Event Player.key_3)
+				] : Global._ultSaverTeam2Hero_Values[Index Of Array Value(Global._ultSaverTeam2Hero_Keys, Event Player.key_4)]);
+		End;
+	}
+}
+
+rule("UltSaver: Restore player's hero and ultimate charge")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Is Alive(Event Player) == True;
+		Has Spawned(Event Player) == True;
+		Event Player.Ult_isPlayerReconnecting == True;
+	}
+
+	actions
+	{
+		Stop Forcing Player To Be Hero(Event Player);
+		Wait(1, Ignore Condition);
+		Set Ultimate Charge(Event Player, Event Player.Ult_reconnectingPlayerChargePerc);
+		Event Player.Ult_isPlayerReconnecting = False;
+		Event Player.Ult_reconnectingPlayerChargePerc = 0;
+	}
+}
+
+rule("UltSaver: Track player's current hero")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Is Waiting For Players == False;
+		(Team Of(Event Player) == Team 1 ? Global._ultSaverTeam1Hero_Values[Index Of Array Value(Global._ultSaverTeam1Hero_Keys,
+			Event Player.key_5)] != Hero Of(Event Player) : Global._ultSaverTeam2Hero_Values[Index Of Array Value(
+			Global._ultSaverTeam2Hero_Keys, Event Player.key_6)] != Hero Of(Event Player)) == True;
+	}
+
+	actions
+	{
+		Event Player.key_5 = Event Player.Meta_playerName;
+		Event Player.key_6 = Event Player.Meta_playerName;
+		If(Team Of(Event Player) == Team 1);
+			Event Player.index = Index Of Array Value(Global._ultSaverTeam1Hero_Keys, Event Player.Meta_playerName);
+			If(Event Player.index == -1);
+				Modify Global Variable(_ultSaverTeam1Hero_Keys, Append To Array, Event Player.Meta_playerName);
+				Modify Global Variable(_ultSaverTeam1Hero_Values, Append To Array, Hero Of(Event Player));
+			Else;
+				Global._ultSaverTeam1Hero_Values[Event Player.index] = Hero Of(Event Player);
+			End;
+		Else;
+			Event Player.index_0 = Index Of Array Value(Global._ultSaverTeam2Hero_Keys, Event Player.Meta_playerName);
+			If(Event Player.index_0 == -1);
+				Modify Global Variable(_ultSaverTeam2Hero_Keys, Append To Array, Event Player.Meta_playerName);
+				Modify Global Variable(_ultSaverTeam2Hero_Values, Append To Array, Hero Of(Event Player));
+			Else;
+				Global._ultSaverTeam2Hero_Values[Event Player.index_0] = Hero Of(Event Player);
+			End;
+		End;
+		Wait(1, Ignore Condition);
+		Loop If Condition Is True;
+	}
+}
+
+rule("UltSaver: Track player's ultimate charge")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Is Waiting For Players == False;
+		Is Duplicating(Event Player) == False;
+		(Team Of(Event Player) == Team 1 ? Global._ultSaverTeam1Charge_Values[Index Of Array Value(Global._ultSaverTeam1Charge_Keys,
+			Event Player.key_7)] != Ultimate Charge Percent(Event Player) : Global._ultSaverTeam2Charge_Values[Index Of Array Value(
+			Global._ultSaverTeam2Charge_Keys, Event Player.key_8)] != Ultimate Charge Percent(Event Player)) == True;
+	}
+
+	actions
+	{
+		Event Player.key_7 = Event Player.Meta_playerName;
+		Event Player.key_8 = Event Player.Meta_playerName;
+		Abort If(Is In Alternate Form(Event Player) == True && Hero Of(Event Player) == Hero(D.Va));
+		If(Team Of(Event Player) == Team 1);
+			Event Player.index_1 = Index Of Array Value(Global._ultSaverTeam1Charge_Keys, Event Player.Meta_playerName);
+			If(Event Player.index_1 == -1);
+				Modify Global Variable(_ultSaverTeam1Charge_Keys, Append To Array, Event Player.Meta_playerName);
+				Modify Global Variable(_ultSaverTeam1Charge_Values, Append To Array, Ultimate Charge Percent(Event Player));
+			Else;
+				Global._ultSaverTeam1Charge_Values[Event Player.index_1] = Ultimate Charge Percent(Event Player);
+			End;
+		Else;
+			Event Player.index_2 = Index Of Array Value(Global._ultSaverTeam2Charge_Keys, Event Player.Meta_playerName);
+			If(Event Player.index_2 == -1);
+				Modify Global Variable(_ultSaverTeam2Charge_Keys, Append To Array, Event Player.Meta_playerName);
+				Modify Global Variable(_ultSaverTeam2Charge_Values, Append To Array, Ultimate Charge Percent(Event Player));
+			Else;
+				Global._ultSaverTeam2Charge_Values[Event Player.index_2] = Ultimate Charge Percent(Event Player);
+			End;
+		End;
+		Wait(1, Ignore Condition);
+		Loop If Condition Is True;
+	}
+}
+
+rule("UltSaver: Reset ult charge")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Is Using Ultimate(Event Player) == True;
+	}
+
+	actions
+	{
+		If(Team Of(Event Player) == Team 1);
+			Event Player.index_3 = Index Of Array Value(Global._ultSaverTeam1Charge_Keys, Event Player.Meta_playerName);
+			If(Event Player.index_3 == -1);
+				Modify Global Variable(_ultSaverTeam1Charge_Keys, Append To Array, Event Player.Meta_playerName);
+				Modify Global Variable(_ultSaverTeam1Charge_Values, Append To Array, 0);
+			Else;
+				Global._ultSaverTeam1Charge_Values[Event Player.index_3] = 0;
+			End;
+		Else;
+			Event Player.index_4 = Index Of Array Value(Global._ultSaverTeam2Charge_Keys, Event Player.Meta_playerName);
+			If(Event Player.index_4 == -1);
+				Modify Global Variable(_ultSaverTeam2Charge_Keys, Append To Array, Event Player.Meta_playerName);
+				Modify Global Variable(_ultSaverTeam2Charge_Values, Append To Array, 0);
+			Else;
+				Global._ultSaverTeam2Charge_Values[Event Player.index_4] = 0;
+			End;
+		End;
+		Wait(0.250, Ignore Condition);
+		Loop If Condition Is True;
+	}
+}
+
+rule("Settings: Log Options")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.Logs_EnableLogTracker = True;
+		Global.Logs_OutputFormat = 0;
+		Global.Logs_TrackHeroSwaps = False;
+		Global.Logs_TrackMatchStartEnd = True;
+		Global.Logs_TrackRoundStartEnd = True;
+		Global.Logs_TrackObjectiveCapture = True;
+		Global.Logs_PointCaptureProgressStep = 33.333;
+		Global.Logs_PayloadCaptureProgressStep = 10;
+		Global.Logs_PlayerSummaryFrequency = 0;
+	}
+}
+
+rule("Logs: Update Match Time")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.Scrim_MatchTime = 0;
+		While(True);
+			Wait Until(Is Game In Progress, 99999);
+			Chase Global Variable At Rate(Scrim_MatchTime, 99999, 1, None);
+			Wait Until(!Is Game In Progress, 99999);
+			Stop Chasing Global Variable(Scrim_MatchTime);
+		End;
+	}
+}
+
+rule("Logs: Match Start")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Match Round == 1;
+	}
+
+	actions
+	{
+		If(Global.Logs_TrackMatchStartEnd);
+			Log to Inspector(Custom String(",match_start,{0},{1}", Custom String("{0},{1},{2}", Global.Scrim_MatchTime, Current Map,
+				Current Game Mode), Custom String("{0},{1}", Team 1, Team 2)));
+		End;
+	}
+}
+
+rule("Logs: Meta")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+	}
+
+	actions
+	{
+		Wait Until(Host Player.Meta_playerLanguage != Null, 5);
+		Log to Inspector(Custom String(",meta,{0},{1},{2}", Custom String("v20241022"), Host Player, Host Player.Meta_playerLanguage));
+	}
+}
+
+rule("Logs: Round Start")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Is In Setup == True;
+	}
+
+	actions
+	{
+		Global.Logs_CurrentControlScoringTeam = All Teams;
+		Global.Logs_CurrentObjectiveIndex = Objective Index;
+		If(Global.Logs_TrackRoundStartEnd == True);
+			Log to Inspector(Custom String(",round_start,{0},{1},{2}", Custom String("{0},{1},{2}", Global.Scrim_MatchTime, Match Round,
+				Current Game Mode != Game Mode(Контроль) ? (Is Team On Offense(Team 1) ? Team 1 : Team 2) : Null), Custom String("{0},{1}",
+				Team Score(Team 1), Team Score(Team 2)), Custom String("{0}", Objective Index)));
+			Wait Until(Is Game In Progress, 99999);
+			Log to Inspector(Custom String(",setup_complete,{0}", Custom String("{0},{1},{2}", Global.Scrim_MatchTime, Match Round,
+				Match Time)));
+		End;
+	}
+}
+
+rule("Logs: Round Complete")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_TrackRoundStartEnd == True;
+		Is Between Rounds == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",round_end,{0},{1},{2}", Custom String("{0},{1},{2}", Global.Scrim_MatchTime, Match Round,
+			Current Game Mode != Game Mode(Контроль) ? (Is Team On Offense(Team 1) ? Team 1 : Team 2) : Null), Custom String("{0},{1}",
+			Team Score(Team 1), Team Score(Team 2)), Custom String("{0},{1},{2}", Objective Index, Custom String("{0},{1}",
+			Control Mode Scoring Percentage(Team 1), Control Mode Scoring Percentage(Team 2)), Match Time)));
+	}
+}
+
+rule("Logs: Match Complete")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_TrackMatchStartEnd == True;
+		Is Match Complete == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",match_end,{0},{1},{2}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+			Custom String("{0}", Team Score(Team 1)), Custom String("{0}", Team Score(Team 2))));
+	}
+}
+
+rule("Logs: Control Point Increment")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_PointCaptureProgressStep > 0;
+		Is Game In Progress == True;
+		Point Capture Percentage >= Global.Logs_PointCaptureProgress + Global.Logs_PointCaptureProgressStep;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",point_progress,{0},{1}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+			Custom String("{0},{1},{2}", Current Game Mode == Game Mode(Контроль) ? Opposite Team Of(Control Mode Scoring Team) : (
+			Is Team On Offense(Team 1) ? Team 1 : Team 2), Objective Index, Point Capture Percentage)));
+		Global.Logs_PointCaptureProgress += Global.Logs_PointCaptureProgressStep;
+	}
+}
+
+rule("Logs: Payload Increment")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_PayloadCaptureProgressStep > 0;
+		Is Game In Progress == True;
+		Payload Progress Percentage >= Global.Logs_PayloadCaptureProgress + Global.Logs_PayloadCaptureProgressStep;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",payload_progress,{0},{1}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+			Custom String("{0},{1},{2}", Is Team On Offense(Team 1) ? Team 1 : Team 2, Objective Index, Payload Progress Percentage)));
+		Global.Logs_PayloadCaptureProgress += Global.Logs_PayloadCaptureProgressStep;
+	}
+}
+
+rule("Logs: Reset Control Point Progress")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_PointCaptureProgressStep > 0;
+		Is Game In Progress == True;
+		Point Capture Percentage == 0;
+	}
+
+	actions
+	{
+		Global.Logs_PointCaptureProgress = 0;
+	}
+}
+
+rule("Logs: Reset Payload Progress")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_PayloadCaptureProgressStep > 0;
+		Is Game In Progress == True;
+		Payload Progress Percentage == 0;
+	}
+
+	actions
+	{
+		Global.Logs_PayloadCaptureProgress = 0;
+	}
+}
+
+rule("Logs: Objective Updated + Objective Captured (Clash)")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_TrackObjectiveCapture == True;
+		Global.Logs_CurrentObjectiveIndex != Objective Index;
+	}
+
+	actions
+	{
+		If(Current Game Mode == Game Mode(Битва));
+			Log to Inspector(Custom String(",objective_captured,{0},{1},{2}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+				Custom String("{0},{1}", Objective Index > Global.Logs_CurrentObjectiveIndex ? Team 1 : Team 2, Objective Index),
+				Custom String("{0},{1},{2}", Null, Null, Match Time)));
+		End;
+		Log to Inspector(Custom String(",objective_updated,{0},{1}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+			Custom String("{0},{1}", Global.Logs_CurrentObjectiveIndex, Objective Index)));
+		Wait(0.016, Ignore Condition);
+		Global.Logs_CurrentObjectiveIndex = Objective Index;
+	}
+}
+
+rule("Logs: Objective Captured (Assault/Escort/Hybrid)")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_TrackObjectiveCapture == True;
+		Is Game In Progress == True;
+		Current Game Mode != Game Mode(Контроль);
+		Current Game Mode != Game Mode(Точка возгорания);
+		Current Game Mode != Game Mode(Натиск);
+		Current Game Mode != Game Mode(Битва);
+		Is Objective Complete(Global.Logs_CurrentObjectiveIndex) == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",objective_captured,{0},{1},{2}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+			Custom String("{0},{1}", Is Team On Offense(Team 1) ? Team 1 : Team 2, Objective Index), Custom String("{0},{1},{2}", Null,
+			Null, Match Time)));
+	}
+}
+
+rule("Logs: Objective Captured (Control/Flashpoint)")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Global.Logs_TrackObjectiveCapture == True;
+		Is Game In Progress == True;
+		(Current Game Mode == Game Mode(Контроль) || Current Game Mode == Game Mode(Точка возгорания)) == True;
+		Control Mode Scoring Team != Global.Logs_CurrentControlScoringTeam;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",objective_captured,{0},{1},{2}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+			Custom String("{0},{1}", Control Mode Scoring Team, Objective Index), Custom String("{0},{1},{2}",
+			Control Mode Scoring Percentage(Team 1), Control Mode Scoring Percentage(Team 2), Match Time)));
+		Global.Logs_CurrentControlScoringTeam = Control Mode Scoring Team;
+	}
+}
+
+rule("Logs: Kills")
+{
+	event
+	{
+		Player Died;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",kill,{0},{1}", Global.Scrim_MatchTime, Custom String("{0},{1},{2}", Custom String("{0},{1},{2}",
+			Team Of(Attacker), Attacker, Hero Of(Attacker)), Custom String("{0},{1},{2}", Team Of(Victim), Victim, Hero Of(Victim)),
+			Custom String("{0},{1},{2}", Custom String("{0},{1}", Event Ability, Event Damage), Event Was Critical Hit,
+			Event Was Environment))));
+	}
+}
+
+rule("Logs SUBR: Calculate Hero Played Time")
+{
+	event
+	{
+		Subroutine;
+		CalcHeroPlayedTime;
+	}
+
+	actions
+	{
+		Event Player.Logs_HeroesPlayedTimeArray[Index Of Array Value(Event Player.Logs_HeroesPlayedArray, Event Player.Logs_LastHero)
+			] += Global.Scrim_MatchTime - Event Player.Logs_LastHeroTime;
+	}
+}
+
+rule("Logs: Hero Spawn/Swap")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		(Global.Logs_TrackHeroSwaps || Global.Logs_PlayerSummaryCount != 2) == True;
+		Hero Of(Event Player) != Event Player.Logs_LastHero;
+		Is Match Complete == False;
+	}
+
+	actions
+	{
+		If(Global.Logs_TrackHeroSwaps && Array Contains(Все герои, Hero Of(Event Player)));
+			If(Array Contains(Все герои, Event Player.Logs_LastHero));
+				Log to Inspector(Custom String(",hero_swap,{0},{1},{2}", Global.Scrim_MatchTime, Custom String("{0},{1}", Team Of(Event Player),
+					Event Player), Custom String("{0},{1},{2}", Hero Of(Event Player), Event Player.Logs_LastHero,
+					Global.Scrim_MatchTime - Event Player.Logs_LastHeroTime)));
+			Else;
+				Log to Inspector(Custom String(",hero_spawn,{0},{1},{2}", Global.Scrim_MatchTime, Custom String("{0},{1}", Team Of(Event Player),
+					Event Player), Custom String("{0},{1},{2}", Hero Of(Event Player), Event Player.Logs_LastHero,
+					Global.Scrim_MatchTime - Event Player.Logs_LastHeroTime)));
+			End;
+		End;
+		If(!Array Contains(Event Player.Logs_HeroesPlayedArray, Hero Of(Event Player)) && Array Contains(Все герои, Hero Of(
+			Event Player)));
+			Modify Player Variable(Event Player, Logs_HeroesPlayedArray, Append To Array, Hero Of(Event Player));
+		End;
+		If(Array Contains(Все герои, Hero Of(Event Player)) && Array Contains(Все герои, Event Player.Logs_LastHero));
+			Call Subroutine(CalcHeroPlayedTime);
+		End;
+		Event Player.Logs_LastHero = Hero Of(Event Player);
+		Event Player.Logs_LastHeroTime = Global.Scrim_MatchTime;
+	}
+}
+
+rule("Logs: Offensive Assists")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Event Player.Logs_OffensiveAssists < Player Stat(Event Player, Offensive Assists);
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",offensive_assist,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+			"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0}", Hero Being Duplicated(
+			Event Player))));
+		Event Player.Logs_OffensiveAssists += 1;
+		Loop If Condition Is True;
+	}
+}
+
+rule("Logs: Defensive Assists")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Event Player.Logs_DefensiveAssists < Player Stat(Event Player, Defensive Assists);
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",defensive_assist,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+			"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0}", Hero Being Duplicated(
+			Event Player))));
+		Event Player.Logs_DefensiveAssists += 1;
+		Loop If Condition Is True;
+	}
+}
+
+rule("Logs: Ultimate Charged")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Ultimate Charge Percent(Event Player) == 100;
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Event Player.Logs_UltimateID += 1;
+		If(Hero Of(Event Player) == Hero(D.Va) && Is In Alternate Form(Event Player) && Global.Logs_TrackDvaDemechs);
+			Log to Inspector(Custom String(",remech_charged,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+				"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(
+				Event Player), Event Player.Logs_UltimateID)));
+		Else;
+			Log to Inspector(Custom String(",ultimate_charged,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+				"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(
+				Event Player), Event Player.Logs_UltimateID)));
+		End;
+	}
+}
+
+rule("Logs: Ultimate Used")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Is Using Ultimate(Event Player) == True;
+		Hero Of(Event Player) != Hero(D.Va);
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",ultimate_start,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+			"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(
+			Event Player), Event Player.Logs_UltimateID)));
+		Wait Until(!Is Using Ultimate(Event Player), 99999);
+		Log to Inspector(Custom String(",ultimate_end,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+			"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(
+			Event Player), Event Player.Logs_UltimateID)));
+	}
+}
+
+rule("Logs: D.Va Remech/Self-Destruct Used")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Is Using Ultimate(Event Player) == True;
+		Hero Of(Event Player) == Hero(D.Va);
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Wait(1.740, Ignore Condition);
+		If(Global.Logs_TrackDvaDemechs && !Is In Alternate Form(Event Player));
+			Log to Inspector(Custom String(",dva_remech,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+				"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0}",
+				Event Player.Logs_UltimateID)));
+		Else If(Global.Logs_TrackUltimates);
+			Log to Inspector(Custom String(",ultimate_start,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+				"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(
+				Event Player), Event Player.Logs_UltimateID)));
+			Wait Until(!Is Using Ultimate(Event Player), 99999);
+			Log to Inspector(Custom String(",ultimate_end,{0},{1},{2}", Custom String("{0}", Global.Scrim_MatchTime), Custom String(
+				"{0},{1},{2}", Team Of(Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(
+				Event Player), Event Player.Logs_UltimateID)));
+		End;
+	}
+}
+
+rule("Logs: Echo Duplicate")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Is Game In Progress == True;
+		Is Duplicating(Event Player) == True;
+	}
+
+	actions
+	{
+		Event Player.Logs_DuplicateID = Event Player.Logs_UltimateID;
+		Log to Inspector(Custom String(",echo_duplicate_start,{0},{1},{2}", Global.Scrim_MatchTime, Custom String("{0},{1},{2}", Team Of(
+			Event Player), Event Player, Hero Of(Event Player)), Custom String("{0},{1}", Hero Being Duplicated(Event Player),
+			Event Player.Logs_DuplicateID)));
+		Wait Until(!Is Duplicating(Event Player), 99999);
+		Log to Inspector(Custom String(",echo_duplicate_end,{0},{1},{2}", Global.Scrim_MatchTime, Custom String("{0},{1},{2}", Team Of(
+			Event Player), Event Player, Hero Of(Event Player)), Event Player.Logs_DuplicateID));
+	}
+}
+
+rule("Logs: Mercy Resurrect")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		Is Game In Progress == True;
+		Is Dead(Event Player) == True;
+	}
+
+	actions
+	{
+		Wait Until(Is Alive(Event Player), 99999);
+		Wait(0.240, Ignore Condition);
+		If(!Is In Spawn Room(Event Player) && Is Game In Progress);
+			Log to Inspector(Custom String(",mercy_rez,{0},{1}", Global.Scrim_MatchTime, Custom String("{0},{1}", Custom String("{0},{1},{2}",
+				Team Of(Event Player), Players On Hero(Hero(Ангел), Team Of(Event Player)), Hero(Ангел)), Custom String("{0},{1},{2}", Team Of(
+				Event Player), Event Player, Hero Of(Event Player)))));
+		End;
+	}
+}
+
+rule("Calculate Juno's healing dealt")
+{
+	event
+	{
+		Subroutine;
+		CalculateJunosHealingDealt;
+	}
+
+	actions
+	{
+		Event Player.playerHealingDealt = Player Stat(Event Player, Healing Dealt);
+		For Player Variable(Event Player, hero, 0, Count Of(Event Player.Logs_HeroesPlayedArray), 1);
+			If(Event Player.Logs_HeroesPlayedArray[Event Player.hero] != Hero(Юнона));
+				Event Player.playerHealingDealt -= Player Hero Stat(Event Player, Event Player.Logs_HeroesPlayedArray[Event Player.hero],
+					Healing Dealt);
+			End;
+		End;
+		Event Player.returnValue_CalculateJunosHealin = Event Player.playerHealingDealt;
+	}
+}
+
+rule("Logs: Player Stat Summary")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		Все;
+	}
+
+	conditions
+	{
+		Global.Logs_EnableLogTracker == True;
+		(Global.Logs_PlayerSummaryFrequency == 0 || (Global.Logs_PlayerSummaryFrequency == 1 && Is Match Complete)) == True;
+		Is Between Rounds == True;
+	}
+
+	actions
+	{
+		Enable Inspector Recording;
+		Call Subroutine(CalcHeroPlayedTime);
+		For Player Variable(Event Player, Logs_CurrentHeroIterator, 0, Count Of(Event Player.Logs_HeroesPlayedArray), 1);
+			Event Player.Logs_CurrentHeroIterated = Event Player.Logs_HeroesPlayedArray[Event Player.Logs_CurrentHeroIterator];
+			Call Subroutine(CalculateJunosHealingDealt);
+			Log to Inspector(Custom String(",player_stat,{0},{1},{2}", Custom String("{0},{1}", Global.Scrim_MatchTime, Match Round),
+				Custom String("{0},{1},{2}", Team Of(Event Player), Event Player, Event Player.Logs_CurrentHeroIterated), Custom String(
+				"{0},{1}", Custom String("{0},{1},{2}", Custom String("{0},{1},{2}", Custom String("{0},{1},{2}", Player Hero Stat(
+				Event Player, Event Player.Logs_CurrentHeroIterated, Eliminations), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Final Blows), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated,
+				Deaths)), Custom String("{0},{1},{2}", Event Player.Logs_CurrentHeroIterated == Hero(Мэй) ? Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Hero Damage Dealt) + Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Barrier Damage Dealt) : Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, All Damage Dealt), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated,
+				Barrier Damage Dealt), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Hero Damage Dealt)),
+				Custom String("{0},{1},{2}", Event Player.Logs_CurrentHeroIterated == Hero(Юнона)
+				? Event Player.returnValue_CalculateJunosHealin : Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated,
+				Healing Dealt), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Healing Received), Player Hero Stat(
+				Event Player, Event Player.Logs_CurrentHeroIterated, Self Healing))), Custom String("{0},{1},{2}", Custom String("{0},{1}",
+				Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Damage Taken), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Damage Blocked)), Custom String("{0},{1}", Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Defensive Assists), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Offensive Assists)), Custom String("{0},{1}", Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Ultimates Earned), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated,
+				Ultimates Used))), Custom String("{0},{1}", Custom String("{0},{1},{2}", Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Multikill Best), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated,
+				Multikills), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Solo Kills)), Custom String("{0},{1},{2}",
+				Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Objective Kills), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Environmental Kills), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Environmental Deaths)))), Custom String("{0},{1}", Custom String("{0},{1},{2}",
+				Custom String("{0},{1}", Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Critical Hits),
+				Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Critical Hit Accuracy)), Custom String("{0},{1},{2}",
+				Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Scoped Accuracy), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Scoped Critical Hit Accuracy), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Scoped Critical Hit Kills)), Custom String("{0},{1},{2}", Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Shots Fired), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated,
+				Shots Hit), Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Shots Missed))), Custom String("{0},{1}",
+				Custom String("{0},{1},{2}", Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Scoped Shots),
+				Player Hero Stat(Event Player, Event Player.Logs_CurrentHeroIterated, Scoped Hits), Player Hero Stat(Event Player,
+				Event Player.Logs_CurrentHeroIterated, Weapon Accuracy)),
+				Event Player.Logs_HeroesPlayedTimeArray[Event Player.Logs_CurrentHeroIterator])))));
+		End;
+		Global.Logs_PlayerSummaryCount += 1;
+	}
+}
+
+rule("Logs: Player Has Joined")
+{
+	event
+	{
+		Player Joined Match;
+		All;
+		Все;
+	}
+
+	actions
+	{
+		Log to Inspector(Custom String(",player_joined,{0},{1},{2}", Global.Scrim_MatchTime, Event Player, Team Of(Event Player)));
+		Event Player.Logs_HeroesPlayedArray = Empty Array;
+	}
+}

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
-use crate::dal::{Dal, ManagedTournamentRow};
+use crate::dal::{Dal, ManagedTournamentRow, MatchWithTeamsRow};
 
 #[derive(Debug, Serialize)]
 struct ManagedTournamentResponse {
@@ -19,8 +19,23 @@ struct ManagedTournamentResponse {
     pub registration_count: Option<i64>,
 }
 
+#[derive(Debug, Serialize)]
+struct MatchResponse {
+    pub id: i64,
+    pub home_team_id: i64,
+    pub home_team_name: String,
+    pub away_team_id: i64,
+    pub away_team_name: String,
+    pub home_score: i64,
+    pub away_score: i64,
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::scope("/tournaments").service(list_managed_tournaments));
+    cfg.service(
+        web::scope("/tournaments")
+            .service(list_managed_tournaments)
+            .service(list_tournament_matches),
+    );
 }
 
 #[get("")]
@@ -54,6 +69,46 @@ pub async fn list_managed_tournaments(
         .collect::<Vec<_>>();
 
     Ok(HttpResponse::Ok().json(response))
+}
+
+#[get("/{tournament_id}/matches")]
+pub async fn list_tournament_matches(
+    path: web::Path<i64>,
+    _user: AuthenticatedUser,
+    db: web::Data<Arc<Dal>>,
+) -> actix_web::Result<impl Responder, ApiError> {
+    let tournament_id = path.into_inner();
+
+    let matches = db
+        .matches
+        .list_by_tournament(tournament_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to load matches for tournament {}: {}",
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?;
+
+    let response = matches.into_iter().map(map_match).collect::<Vec<_>>();
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
+fn map_match(row: MatchWithTeamsRow) -> MatchResponse {
+    MatchResponse {
+        id: row.id,
+        home_team_id: row.home_team_id,
+        home_team_name: row.home_team_name,
+        away_team_id: row.away_team_id,
+        away_team_name: row.away_team_name,
+        home_score: row.home_score,
+        away_score: row.away_score,
+    }
 }
 
 fn map_managed_tournament(row: ManagedTournamentRow) -> ManagedTournamentResponse {

@@ -21,6 +21,29 @@ impl TeamsRepo {
         Self { pool }
     }
 
+    pub async fn get_by_id(&self, team_id: i64) -> Result<Option<TeamRow>, sqlx::Error> {
+        self.get_by_id_with_executor(&self.pool, team_id).await
+    }
+
+    pub async fn get_by_id_with_executor<'e, E>(
+        &self,
+        executor: E,
+        team_id: i64,
+    ) -> Result<Option<TeamRow>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
+        sqlx::query_as::<_, TeamRow>(
+            r#"
+            SELECT id, tournament_id, name, created_at, modified_at, deleted_at
+            FROM teams WHERE id = ?1 LIMIT 1
+            "#,
+        )
+        .bind(team_id)
+        .fetch_optional(executor)
+        .await
+    }
+
     pub async fn get_by_tournament_and_name(
         &self,
         tournament_id: &i64,

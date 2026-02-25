@@ -14,19 +14,19 @@ impl MatchEventsRepo {
 
     pub async fn insert(
         &self,
-        match_id: i64,
+        match_map_id: i64,
         time: NaiveTime,
         event_name: &str,
         data: Value,
     ) -> Result<(), sqlx::Error> {
-        self.insert_with_executor(&self.pool, match_id, time, event_name, data)
+        self.insert_with_executor(&self.pool, match_map_id, time, event_name, data)
             .await
     }
 
     pub async fn insert_with_executor<'e, E>(
         &self,
         executor: E,
-        match_id: i64,
+        match_map_id: i64,
         time: NaiveTime,
         event_name: &str,
         data: Value,
@@ -37,13 +37,13 @@ impl MatchEventsRepo {
         sqlx::query(
             r#"
             INSERT INTO match_events (
-              match_id, time, event, data
+              match_map_id, time, event, data
             ) VALUES (
               ?1, ?2, ?3, ?4
             )
             "#,
         )
-        .bind(match_id)
+        .bind(match_map_id)
         .bind(time)
         .bind(event_name)
         .bind(data)

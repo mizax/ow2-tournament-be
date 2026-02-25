@@ -320,8 +320,8 @@ async fn matches_repo_reads_match_row() {
     sqlx::query(
         r#"
         INSERT INTO matches (
-            tournament_id, home_team_id, away_team_id, home_score, away_score, duration, log_name
-        ) VALUES (?1, ?2, ?3, 3, 2, 123.4, 'match.log')
+            tournament_id, home_team_id, away_team_id, home_score, away_score, duration
+        ) VALUES (?1, ?2, ?3, 3, 2, 123)
         "#,
     )
     .bind(tournament_id)
@@ -341,7 +341,7 @@ async fn matches_repo_reads_match_row() {
 
     let row = matches_repo.get_by_id(match_id).await.expect("get_by_id");
     assert!(row.is_some());
-    assert_eq!(row.unwrap().log_name, "match.log");
+    assert_eq!(row.unwrap().id, match_id);
 }
 
 #[tokio::test]

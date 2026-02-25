@@ -14,11 +14,21 @@ pub struct MatchRow {
     pub away_team_id: i64,
     pub home_score: i64,
     pub away_score: i64,
-    pub duration: f32,
-    pub log_name: String,
+    pub duration: i64,
     pub created_at: NaiveDateTime,
     pub modified_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct MatchWithTeamsRow {
+    pub id: i64,
+    pub home_team_id: i64,
+    pub home_team_name: String,
+    pub away_team_id: i64,
+    pub away_team_name: String,
+    pub home_score: i64,
+    pub away_score: i64,
 }
 
 impl MatchesRepo {
@@ -68,7 +78,6 @@ impl MatchesRepo {
               home_score,
               away_score,
               duration,
-              log_name,
               created_at,
               modified_at,
               deleted_at
@@ -79,6 +88,33 @@ impl MatchesRepo {
         )
         .bind(match_id)
         .fetch_optional(executor)
+        .await
+    }
+
+    pub async fn list_by_tournament(
+        &self,
+        tournament_id: i64,
+    ) -> Result<Vec<MatchWithTeamsRow>, sqlx::Error> {
+        sqlx::query_as::<_, MatchWithTeamsRow>(
+            r#"
+            SELECT
+              m.id,
+              m.home_team_id,
+              ht.name AS home_team_name,
+              m.away_team_id,
+              at.name AS away_team_name,
+              m.home_score,
+              m.away_score
+            FROM matches m
+            JOIN teams ht ON ht.id = m.home_team_id
+            JOIN teams at ON at.id = m.away_team_id
+            WHERE m.tournament_id = ?1
+              AND m.deleted_at IS NULL
+            ORDER BY m.id
+            "#,
+        )
+        .bind(tournament_id)
+        .fetch_all(&self.pool)
         .await
     }
 }
