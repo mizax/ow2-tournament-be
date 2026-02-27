@@ -14,6 +14,9 @@ pub struct SaveContext {
     /// Team labels from the most recent match_start event (team1, team2 in log order).
     pub current_team1_label: Option<String>,
     pub current_team2_label: Option<String>,
+    /// Last seen cumulative player_stat per (player_id, hero_id) for the current map.
+    /// Blizzard emits cumulative stats per round; we subtract the previous snapshot to get per-round deltas.
+    pub last_player_stats: HashMap<(i64, i64), Vec<String>>,
 }
 
 impl SaveContext {
@@ -25,6 +28,7 @@ impl SaveContext {
             team_label_to_id: HashMap::new(),
             current_team1_label: None,
             current_team2_label: None,
+            last_player_stats: HashMap::new(),
         }
     }
 }
@@ -134,6 +138,7 @@ pub async fn save_events(
                 ctx.current_round = 0;
                 ctx.current_team1_label = generic.fields.get(5).cloned();
                 ctx.current_team2_label = generic.fields.get(6).cloned();
+                ctx.last_player_stats.clear();
 
                 let match_map_id = db
                     .match_maps
@@ -204,6 +209,10 @@ pub async fn save_events(
                 let player_id = fetch_player_id(db, &mut *tx, &team, &player_stat.player).await?;
                 let hero_id = fetch_hero_id(db, &mut *tx, &player_stat.hero).await?;
 
+                let prev = ctx.last_player_stats.get(&(player_id, hero_id)).map(|v| v.as_slice()).unwrap_or(&[]);
+                let delta_stats = compute_delta_stats(&player_stat.stats, prev);
+                ctx.last_player_stats.insert((player_id, hero_id), player_stat.stats.clone());
+
                 db.match_player_statistics
                     .insert_with_executor(
                         &mut *tx,
@@ -211,7 +220,7 @@ pub async fn save_events(
                         round,
                         player_id,
                         hero_id,
-                        &player_stat.stats,
+                        &delta_stats,
                     )
                     .await
                     .map_err(|e| {
@@ -279,6 +288,91 @@ async fn fetch_hero_id(db: &Dal, tx: &mut SqliteConnection, hero: &str) -> Resul
         .find_id_by_any_localized_name_with_executor(&mut *tx, hero)
         .await?
         .ok_or_else(|| SaveError::HeroNotFound(hero.to_string()))
+}
+
+/// Stat indices that are cumulative sums — we store per-round deltas for these.
+/// Index 15 (multikill_best) is a running MAX, kept as-is.
+/// Indices 22, 23, 24, 31 (accuracy %) are recomputed from delta shot counters below.
+const CUMULATIVE_SUM_INDICES: &[usize] = &[
+    0,  // eliminations
+    1,  // final_blows
+    2,  // deaths
+    3,  // all_damage
+    4,  // barrier_damage
+    5,  // hero_damage
+    6,  // healing_dealt
+    7,  // healing_received
+    8,  // self_healing
+    9,  // damage_taken
+    10, // damage_blocked
+    11, // defensive_assists
+    12, // offensive_assists
+    13, // ultimates_earned
+    14, // ultimates_used
+    // 15: multikill_best — kept as cumulative MAX
+    16, // multikills
+    17, // solo_kills
+    18, // objective_kills
+    19, // environmental_kills
+    20, // environmental_deaths
+    21, // critical_hits
+    // 22: critical_hit_accuracy — recomputed
+    // 23: scoped_accuracy — recomputed
+    // 24: scoped_critical_hit_accuracy — recomputed
+    25, // scoped_critical_hit_kills
+    26, // shots_fired
+    27, // shots_hit
+    28, // shots_missed
+    29, // scoped_shots_fired
+    30, // scoped_shots_hit
+    // 31: weapon_accuracy — recomputed
+    32, // hero_time_played
+];
+
+fn stat_as_f64(stats: &[String], i: usize) -> f64 {
+    stats.get(i).and_then(|s| s.trim().parse::<f64>().ok()).unwrap_or(0.0)
+}
+
+fn delta_f64(current: &[String], prev: &[String], i: usize) -> f64 {
+    (stat_as_f64(current, i) - stat_as_f64(prev, i)).max(0.0)
+}
+
+fn fmt_delta(d: f64) -> String {
+    if d.fract() == 0.0 { format!("{}", d as i64) } else { format!("{}", d) }
+}
+
+fn pct_of(num: f64, den: f64) -> String {
+    if den > 0.0 { format!("{:.2}", num / den * 100.0) } else { "0".to_string() }
+}
+
+/// Convert Blizzard's cumulative player_stat snapshot into a per-round delta.
+/// `prev` is the previous snapshot for the same (player, hero) on this map,
+/// or an empty slice for the first round (delta == raw value).
+/// All deltas are clamped to 0 to handle Blizzard data inconsistencies.
+fn compute_delta_stats(current: &[String], prev: &[String]) -> Vec<String> {
+    let len = current.len();
+    let mut result = current.to_vec();
+
+    for &i in CUMULATIVE_SUM_INDICES {
+        if i < len {
+            result[i] = fmt_delta(delta_f64(current, prev, i));
+        }
+    }
+
+    // Recompute accuracy fields from delta shot counters.
+    let d_shots_fired        = delta_f64(current, prev, 26);
+    let d_shots_hit          = delta_f64(current, prev, 27);
+    let d_scoped_shots_fired = delta_f64(current, prev, 29);
+    let d_scoped_shots_hit   = delta_f64(current, prev, 30);
+    let d_crit_hits          = delta_f64(current, prev, 21);
+    let d_scoped_crit_kills  = delta_f64(current, prev, 25);
+
+    if 22 < len { result[22] = pct_of(d_crit_hits, d_shots_fired); }         // critical_hit_accuracy
+    if 23 < len { result[23] = pct_of(d_scoped_shots_hit, d_scoped_shots_fired); } // scoped_accuracy
+    if 24 < len { result[24] = pct_of(d_scoped_crit_kills, d_scoped_shots_hit); }  // scoped_critical_hit_accuracy
+    if 31 < len { result[31] = pct_of(d_shots_hit, d_shots_fired); }          // weapon_accuracy
+
+    result
 }
 
 async fn save_single_event(

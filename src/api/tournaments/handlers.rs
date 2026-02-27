@@ -156,7 +156,6 @@ struct TournamentMatchFlatRow {
     away_score: Option<i64>,
     home_team: String,
     away_team: String,
-    map_id: Option<i64>,
     map_order: Option<i64>,
     map_home: Option<i64>,
     map_away: Option<i64>,
@@ -187,7 +186,7 @@ pub async fn get_tournament_matches(
         r#"
         SELECT m.id, m.home_score, m.away_score,
                ht.name as home_team, at.name as away_team,
-               mm.id as map_id, mm.map_order, mm.home_score as map_home, mm.away_score as map_away,
+               mm.map_order, mm.home_score as map_home, mm.away_score as map_away,
                maps.name as map_name, modes.name as mode_name
         FROM matches m
         JOIN teams ht ON m.home_team_id = ht.id

@@ -133,7 +133,7 @@ async fn get_player_matches(
                ht.name as home_team, at.name as away_team,
                tour.title as tournament_title,
                COUNT(DISTINCT mps.match_map_id) as maps_played,
-               SUM(mps.final_blows) as kills,
+               SUM(mps.eliminations) as kills,
                SUM(mps.deaths) as deaths,
                SUM(mps.all_damage) as damage,
                SUM(mps.healing_dealt) as healing,

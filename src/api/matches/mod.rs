@@ -40,7 +40,6 @@ struct MatchMapFlatRow {
     away_score: Option<i64>,
     home_team: String,
     away_team: String,
-    map_id: Option<i64>,
     map_order: Option<i64>,
     map_home: Option<i64>,
     map_away: Option<i64>,
@@ -59,7 +58,7 @@ async fn get_match(
         r#"
         SELECT m.id, m.home_score, m.away_score,
                ht.name as home_team, at.name as away_team,
-               mm.id as map_id, mm.map_order, mm.home_score as map_home, mm.away_score as map_away,
+               mm.map_order, mm.home_score as map_home, mm.away_score as map_away,
                maps.name as map_name, modes.name as mode_name
         FROM matches m
         JOIN teams ht ON m.home_team_id = ht.id
@@ -116,19 +115,24 @@ async fn get_match(
 struct PlayerStats {
     player_id: i64,
     nickname: String,
+    role: Option<String>,
     team_id: i64,
     team_name: String,
     hero_name: String,
     elims: Option<i64>,
-    kills: Option<i64>,
+    final_blows: Option<i64>,
+    assists: Option<i64>,
     deaths: Option<i64>,
-    damage: Option<f64>,
     hero_damage: Option<f64>,
     healing: Option<f64>,
-    damage_taken: Option<f64>,
     damage_blocked: Option<f64>,
     ults_earned: Option<i64>,
     ults_used: Option<i64>,
+    // Tooltip details
+    solo_kills: Option<i64>,
+    obj_kills: Option<i64>,
+    env_kills: Option<i64>,
+    env_deaths: Option<i64>,
     time_played: Option<f64>,
 }
 
@@ -175,15 +179,20 @@ struct PlayerStatFlatRow {
     hero_name: String,
     eliminations: Option<i64>,
     final_blows: Option<i64>,
+    offensive_assists: Option<i64>,
+    defensive_assists: Option<i64>,
     deaths: Option<i64>,
-    all_damage: Option<f64>,
     hero_damage: Option<f64>,
     healing_dealt: Option<f64>,
-    damage_taken: Option<f64>,
     damage_blocked: Option<f64>,
     ultimates_earned: Option<i64>,
     ultimates_used: Option<i64>,
+    solo_kills: Option<i64>,
+    objective_kills: Option<i64>,
+    environmental_kills: Option<i64>,
+    environmental_deaths: Option<i64>,
     hero_time_played: Option<f64>,
+    player_role: Option<String>,
     map_name: Option<String>,
     mode_name: Option<String>,
 }
@@ -220,12 +229,16 @@ async fn get_match_stats(
         r#"
         SELECT mm.map_order, mps.round,
                t.name as team_name, t.id as team_id,
-               p.id as player_id, p.nickname,
+               p.id as player_id, p.nickname, p.role as player_role,
                h.name as hero_name,
-               mps.eliminations, mps.final_blows, mps.deaths,
-               mps.all_damage, mps.hero_damage, mps.healing_dealt,
-               mps.damage_taken, mps.damage_blocked,
+               mps.eliminations, mps.final_blows,
+               mps.offensive_assists, mps.defensive_assists,
+               mps.deaths,
+               mps.hero_damage, mps.healing_dealt,
+               mps.damage_blocked,
                mps.ultimates_earned, mps.ultimates_used,
+               mps.solo_kills, mps.objective_kills,
+               mps.environmental_kills, mps.environmental_deaths,
                mps.hero_time_played,
                maps.name as map_name, modes.name as mode_name
         FROM match_player_statistics mps
@@ -237,7 +250,15 @@ async fn get_match_stats(
         LEFT JOIN maps ON gm.map_id = maps.id
         LEFT JOIN modes ON gm.mode_id = modes.id
         WHERE mm.match_id = ?1
-        ORDER BY mm.map_order, mps.round, t.name, p.nickname
+          AND (mps.hero_time_played IS NULL OR mps.hero_time_played > 0)
+        ORDER BY mm.map_order, mps.round, t.name,
+                 CASE p.role
+                   WHEN 'tank'    THEN 1
+                   WHEN 'damage'  THEN 2
+                   WHEN 'support' THEN 3
+                   ELSE 4
+                 END,
+                 p.nickname
         "#,
     )
     .bind(match_id)
@@ -268,19 +289,23 @@ async fn get_match_stats(
         round_entry.push(PlayerStats {
             player_id: row.player_id,
             nickname: row.nickname,
+            role: row.player_role,
             team_id: row.team_id,
             team_name: row.team_name,
             hero_name: row.hero_name,
             elims: row.eliminations,
-            kills: row.final_blows,
+            final_blows: row.final_blows,
+            assists: Some(row.offensive_assists.unwrap_or(0) + row.defensive_assists.unwrap_or(0)),
             deaths: row.deaths,
-            damage: row.all_damage,
             hero_damage: row.hero_damage,
             healing: row.healing_dealt,
-            damage_taken: row.damage_taken,
             damage_blocked: row.damage_blocked,
             ults_earned: row.ultimates_earned,
             ults_used: row.ultimates_used,
+            solo_kills: row.solo_kills,
+            obj_kills: row.objective_kills,
+            env_kills: row.environmental_kills,
+            env_deaths: row.environmental_deaths,
             time_played: row.hero_time_played,
         });
     }
