@@ -3,7 +3,8 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 use ow2_tournament_be::dal::{
     ActionStatus, HeroesRepo, MatchesRepo, NewRegistration, PlayersRepo, RegistrationStatus,
-    RegistrationsRepo, RoleValue, TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo,
+    RegistrationsRepo, RoleValue, TeamsRepo, TournamentManagersRepo, TournamentsRepo,
+    UpdateTournamentData, UsersRepo,
 };
 
 struct TestDb {
@@ -105,6 +106,40 @@ async fn insert_user_with_battletag(pool: &SqlitePool, user_id: i64, battletag: 
         .execute(pool)
         .await
         .expect("insert battletag");
+
+    sqlx::query_scalar("SELECT last_insert_rowid()")
+        .fetch_one(pool)
+        .await
+        .expect("last_insert_rowid")
+}
+
+async fn insert_tournament_without_config(
+    pool: &SqlitePool,
+    title: &str,
+    sef_title: &str,
+    discipline: &str,
+    format: &str,
+    dates_json: &str,
+    prize_amount: f64,
+    prize_currency: &str,
+) -> i64 {
+    sqlx::query(
+        r#"
+        INSERT INTO tournaments (
+            title, sef_title, discipline, format, dates_json, prize_pool_total_amount, prize_pool_currency
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "#,
+    )
+    .bind(title)
+    .bind(sef_title)
+    .bind(discipline)
+    .bind(format)
+    .bind(dates_json)
+    .bind(prize_amount)
+    .bind(prize_currency)
+    .execute(pool)
+    .await
+    .expect("insert tournament without config");
 
     sqlx::query_scalar("SELECT last_insert_rowid()")
         .fetch_one(pool)
@@ -693,4 +728,140 @@ async fn registrations_repo_resolves_requested_action() {
         .expect("resolve_requested_action");
     let resolved = resolved.expect("resolved action");
     assert_eq!(resolved.status, ActionStatus::Resolved);
+}
+
+#[tokio::test]
+async fn tournaments_update_changes_title_and_config() {
+    let db = TestDb::new().await;
+    let tournaments_repo = TournamentsRepo::new(db.pool.clone());
+
+    let id = insert_tournament(
+        &db.pool,
+        "Старый тайтл",
+        "old-sef",
+        "OW2",
+        "Online",
+        r#"["2026-02-21"]"#,
+        40000.0,
+        "RUB",
+    )
+    .await;
+
+    tournaments_repo
+        .update(
+            id,
+            UpdateTournamentData {
+                title: "Новый тайтл".into(),
+                sef_title: "new-sef".into(),
+                discipline: "OW2".into(),
+                format: "Online".into(),
+                dates_json: r#"["2026-03-01"]"#.into(),
+                prize_pool_total_amount: 50000.0,
+                prize_pool_currency: "RUB".into(),
+                configuration_json: r#"{"type":"Online","schedule":[],"prize_pool":{"currency":"RUB","places":[{"place":1,"amount":50000}]}}"#.into(),
+            },
+        )
+        .await
+        .expect("update tournament");
+
+    let updated = tournaments_repo
+        .get_by_id(id)
+        .await
+        .expect("get_by_id")
+        .expect("updated tournament");
+    assert_eq!(updated.title, "Новый тайтл");
+    assert_eq!(updated.sef_title, "new-sef");
+    assert_eq!(updated.config.prize_pool.currency, Some("RUB".into()));
+}
+
+#[tokio::test]
+async fn tournaments_update_is_atomic_on_config_failure() {
+    let db = TestDb::new().await;
+    let tournaments_repo = TournamentsRepo::new(db.pool.clone());
+
+    let id = insert_tournament(
+        &db.pool,
+        "Atomic title",
+        "atomic-sef",
+        "OW2",
+        "Online",
+        r#"["2026-02-21"]"#,
+        100.0,
+        "RUB",
+    )
+    .await;
+
+    sqlx::query("DROP TABLE tournament_configuration")
+        .execute(&db.pool)
+        .await
+        .expect("drop tournament_configuration");
+
+    let result = tournaments_repo
+        .update(
+            id,
+            UpdateTournamentData {
+                title: "Should rollback".into(),
+                sef_title: "should-rollback".into(),
+                discipline: "OW2".into(),
+                format: "Online".into(),
+                dates_json: r#"["2026-03-01"]"#.into(),
+                prize_pool_total_amount: 200.0,
+                prize_pool_currency: "RUB".into(),
+                configuration_json: r#"{"type":"Online","schedule":[],"prize_pool":{}}"#.into(),
+            },
+        )
+        .await;
+    assert!(result.is_err());
+
+    let title: String = sqlx::query_scalar("SELECT title FROM tournaments WHERE id = ?1")
+        .bind(id)
+        .fetch_one(&db.pool)
+        .await
+        .expect("select title");
+    assert_eq!(title, "Atomic title");
+}
+
+#[tokio::test]
+async fn tournaments_update_upserts_config_when_missing() {
+    let db = TestDb::new().await;
+    let tournaments_repo = TournamentsRepo::new(db.pool.clone());
+
+    let id = insert_tournament_without_config(
+        &db.pool,
+        "No config",
+        "no-config",
+        "OW2",
+        "Online",
+        r#"["2026-02-21"]"#,
+        0.0,
+        "",
+    )
+    .await;
+
+    tournaments_repo
+        .update(
+            id,
+            UpdateTournamentData {
+                title: "Config created".into(),
+                sef_title: "config-created".into(),
+                discipline: "OW2".into(),
+                format: "Online".into(),
+                dates_json: r#"["2026-03-01"]"#.into(),
+                prize_pool_total_amount: 123.0,
+                prize_pool_currency: "RUB".into(),
+                configuration_json:
+                    r#"{"type":"Online","schedule":[],"prize_pool":{"currency":"RUB"}}"#.into(),
+            },
+        )
+        .await
+        .expect("update tournament");
+
+    let config: String = sqlx::query_scalar(
+        "SELECT configuration_json FROM tournament_configuration WHERE tournament_id = ?1",
+    )
+    .bind(id)
+    .fetch_one(&db.pool)
+    .await
+    .expect("select config");
+    assert!(config.contains("\"type\":\"Online\""));
 }

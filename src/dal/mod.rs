@@ -42,6 +42,7 @@ pub use tournaments::TournamentDetailsData;
 pub use tournaments::TournamentShortData;
 pub use tournaments::TournamentsRepo;
 pub use tournaments::TournamentsRepoError;
+pub use tournaments::UpdateTournamentData;
 pub use users::User;
 pub use users::UserBattletag;
 pub use users::UsersRepo;

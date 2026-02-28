@@ -42,6 +42,17 @@ pub struct TournamentIdDatesData {
     pub dates: Vec<String>,
 }
 
+pub struct UpdateTournamentData {
+    pub title: String,
+    pub sef_title: String,
+    pub discipline: String,
+    pub format: String,
+    pub dates_json: String,
+    pub prize_pool_total_amount: f64,
+    pub prize_pool_currency: String,
+    pub configuration_json: String,
+}
+
 #[derive(sqlx::FromRow)]
 struct TournamentShortRow {
     pub id: i64,
@@ -303,6 +314,61 @@ impl TournamentsRepo {
             format: row.format,
             config,
         }))
+    }
+
+    pub async fn update(
+        &self,
+        tournament_id: i64,
+        data: UpdateTournamentData,
+    ) -> Result<(), TournamentsRepoError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"
+            UPDATE tournaments
+            SET title = ?1,
+                sef_title = ?2,
+                discipline = ?3,
+                format = ?4,
+                dates_json = ?5,
+                prize_pool_total_amount = ?6,
+                prize_pool_currency = ?7,
+                modified_at = CURRENT_TIMESTAMP
+            WHERE id = ?8
+            "#,
+        )
+        .bind(data.title)
+        .bind(data.sef_title)
+        .bind(data.discipline)
+        .bind(data.format)
+        .bind(data.dates_json)
+        .bind(data.prize_pool_total_amount)
+        .bind(data.prize_pool_currency)
+        .bind(tournament_id)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO tournament_configuration (
+                tournament_id,
+                configuration_json,
+                created_at,
+                modified_at
+            )
+            VALUES (?1, ?2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(tournament_id) DO UPDATE SET
+                configuration_json = excluded.configuration_json,
+                modified_at = CURRENT_TIMESTAMP
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(data.configuration_json)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
     }
 }
 
