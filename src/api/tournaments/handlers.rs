@@ -3,6 +3,7 @@ use crate::dal::registrations::RoleValue;
 use actix_web::{HttpResponse, Responder, get, web};
 use serde::Serialize;
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::models::{Tournament, TournamentShort};
@@ -209,9 +210,34 @@ pub async fn get_tournament_matches(
         }
     })?;
 
-    // Group rows by match id, preserving insertion order
+    let summaries = build_match_summaries(rows);
+
+    Ok(HttpResponse::Ok().json(serde_json::json!(summaries)))
+}
+
+#[get("/{sef_uri}/live-streams")]
+pub async fn get_tournament_live_streams(
+    db: web::Data<Arc<Dal>>,
+    twitch_live_streams_service: Option<web::Data<TournamentLiveStreamsService>>,
+    sef_uri: web::Path<String>,
+) -> actix_web::Result<impl Responder, ApiError> {
+    let sef_uri = sef_uri.into_inner();
+    let Some(twitch_live_streams_service) = twitch_live_streams_service else {
+        log::debug!(
+            "Tournament live streams service is not configured, returning empty result for tournament={}",
+            sef_uri
+        );
+        return Ok(HttpResponse::Ok().json(Vec::<crate::services::LiveStreamSummary>::new()));
+    };
+    let response = twitch_live_streams_service
+        .get_tournament_live_streams(db.get_ref().as_ref(), &sef_uri)
+        .await?;
+    Ok(HttpResponse::Ok().json(response))
+}
+
+fn build_match_summaries(rows: Vec<TournamentMatchFlatRow>) -> Vec<MatchSummary> {
     let mut match_ids: Vec<i64> = Vec::new();
-    let mut matches_map: std::collections::HashMap<
+    let mut matches_map: HashMap<
         i64,
         (
             String,
@@ -220,7 +246,7 @@ pub async fn get_tournament_matches(
             Option<i64>,
             Vec<TournamentMapScore>,
         ),
-    > = std::collections::HashMap::new();
+    > = HashMap::new();
 
     for row in rows {
         if !matches_map.contains_key(&row.id) {
@@ -249,11 +275,12 @@ pub async fn get_tournament_matches(
         }
     }
 
-    let summaries: Vec<MatchSummary> =
-        match_ids
-            .into_iter()
-            .filter_map(|id| {
-                matches_map.remove(&id).map(
+    match_ids
+        .into_iter()
+        .filter_map(|id| {
+            matches_map
+                .remove(&id)
+                .map(
                     |(home_team, away_team, home_score, away_score, maps)| MatchSummary {
                         id,
                         home_team,
@@ -263,28 +290,83 @@ pub async fn get_tournament_matches(
                         maps,
                     },
                 )
-            })
-            .collect();
-
-    Ok(HttpResponse::Ok().json(serde_json::json!(summaries)))
+        })
+        .collect()
 }
 
-#[get("/{sef_uri}/live-streams")]
-pub async fn get_tournament_live_streams(
-    db: web::Data<Arc<Dal>>,
-    twitch_live_streams_service: Option<web::Data<TournamentLiveStreamsService>>,
-    sef_uri: web::Path<String>,
-) -> actix_web::Result<impl Responder, ApiError> {
-    let sef_uri = sef_uri.into_inner();
-    let Some(twitch_live_streams_service) = twitch_live_streams_service else {
-        log::debug!(
-            "Tournament live streams service is not configured, returning empty result for tournament={}",
-            sef_uri
-        );
-        return Ok(HttpResponse::Ok().json(Vec::<crate::services::LiveStreamSummary>::new()));
-    };
-    let response = twitch_live_streams_service
-        .get_tournament_live_streams(db.get_ref().as_ref(), &sef_uri)
-        .await?;
-    Ok(HttpResponse::Ok().json(response))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_match_summaries_groups_rows_by_match_and_preserves_order() {
+        let rows = vec![
+            TournamentMatchFlatRow {
+                id: 10,
+                home_score: Some(3),
+                away_score: Some(1),
+                home_team: "Team A".to_string(),
+                away_team: "Team B".to_string(),
+                map_order: Some(1),
+                map_home: Some(2),
+                map_away: Some(0),
+                map_name: Some("Ilios".to_string()),
+                mode_name: Some("Control".to_string()),
+            },
+            TournamentMatchFlatRow {
+                id: 10,
+                home_score: Some(3),
+                away_score: Some(1),
+                home_team: "Team A".to_string(),
+                away_team: "Team B".to_string(),
+                map_order: Some(2),
+                map_home: Some(1),
+                map_away: Some(0),
+                map_name: Some("Route 66".to_string()),
+                mode_name: Some("Escort".to_string()),
+            },
+            TournamentMatchFlatRow {
+                id: 8,
+                home_score: Some(2),
+                away_score: Some(3),
+                home_team: "Team C".to_string(),
+                away_team: "Team D".to_string(),
+                map_order: Some(1),
+                map_home: Some(0),
+                map_away: Some(1),
+                map_name: Some("Nepal".to_string()),
+                mode_name: Some("Control".to_string()),
+            },
+        ];
+
+        let summaries = build_match_summaries(rows);
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].id, 10);
+        assert_eq!(summaries[0].maps.len(), 2);
+        assert_eq!(summaries[0].maps[0].map_order, 1);
+        assert_eq!(summaries[0].maps[1].map_order, 2);
+        assert_eq!(summaries[1].id, 8);
+        assert_eq!(summaries[1].maps.len(), 1);
+    }
+
+    #[test]
+    fn build_match_summaries_ignores_rows_without_map_order() {
+        let rows = vec![TournamentMatchFlatRow {
+            id: 11,
+            home_score: None,
+            away_score: None,
+            home_team: "Team X".to_string(),
+            away_team: "Team Y".to_string(),
+            map_order: None,
+            map_home: None,
+            map_away: None,
+            map_name: None,
+            mode_name: None,
+        }];
+
+        let summaries = build_match_summaries(rows);
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].id, 11);
+        assert!(summaries[0].maps.is_empty());
+    }
 }
