@@ -12,9 +12,8 @@ use crate::dal::{
     RegistrationRow, RegistrationSortField, RegistrationStatus, RegistrationSummary, RoleValue,
     SortDirection,
 };
-use crate::services::{
-    AuditActor, GeoIpInfo, GeoIpService, audit_change, audit_kinds, log_audit_event,
-};
+use crate::services::audit_service::{AuditActor, insert_change_if_changed, kinds, log_event};
+use crate::services::{GeoIpInfo, GeoIpService};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagerRegistration {
@@ -307,22 +306,6 @@ pub async fn update_status(
         return Err(ApiError::Forbidden);
     }
 
-    let old_status = db
-        .registrations
-        .get_status(registration_id)
-        .await
-        .map_err(|e| {
-            log::error!(
-                "Failed to fetch current status for registration {}: {}",
-                registration_id,
-                e
-            );
-            ApiError::InternalError {
-                error: e.to_string(),
-            }
-        })?
-        .ok_or(ApiError::NotFound)?;
-
     let mut validation_errors = Vec::new();
     // if payload.status == RegistrationStatus::Declined {
     //     if payload
@@ -368,7 +351,8 @@ pub async fn update_status(
         None
     };
 
-    db.registrations
+    let status_update = db
+        .registrations
         .update_status_with_action(
             registration_id,
             payload.status,
@@ -377,10 +361,13 @@ pub async fn update_status(
             user_id,
         )
         .await
-        .map_err(|e| {
-            log::error!("Failed to update registration {}: {}", registration_id, e);
-            ApiError::InternalError {
-                error: e.to_string(),
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => ApiError::NotFound,
+            _ => {
+                log::error!("Failed to update registration {}: {}", registration_id, e);
+                ApiError::InternalError {
+                    error: e.to_string(),
+                }
             }
         })?;
 
@@ -404,24 +391,33 @@ pub async fn update_status(
     let mut registration = map_registration(detail.registration)?;
     registration.geo_ip = geo_ip_service.lookup_ip(&registration.ip_address).await;
 
-    log_audit_event(
-        &db,
-        &AuditActor {
-            user_id,
-            battletag: user.battletag.clone(),
-        },
-        audit_kinds::REGISTRATION_STATUS_CHANGED,
-        registration_id,
-        Some(tournament_id),
-        json!({
-            "status": audit_change(
-                serde_json::to_value(old_status).unwrap_or(serde_json::Value::Null),
-                serde_json::to_value(payload.status).unwrap_or(serde_json::Value::Null)
-            ),
-            "decline_reason": decline_reason
-        }),
-    )
-    .await;
+    let mut changed_fields = serde_json::Map::new();
+    insert_change_if_changed(
+        &mut changed_fields,
+        "status",
+        serde_json::to_value(status_update.old_status).unwrap_or(serde_json::Value::Null),
+        serde_json::to_value(status_update.updated.status).unwrap_or(serde_json::Value::Null),
+    );
+    if let Some(reason) = decline_reason {
+        changed_fields.insert(
+            "decline_reason".to_string(),
+            serde_json::Value::String(reason),
+        );
+    }
+    if !changed_fields.is_empty() {
+        log_event(
+            &db,
+            &AuditActor {
+                user_id,
+                battletag: user.battletag.clone(),
+            },
+            kinds::REGISTRATION_STATUS_CHANGED,
+            registration_id,
+            Some(tournament_id),
+            json!({ "changed_fields": changed_fields }),
+        )
+        .await;
+    }
 
     Ok(HttpResponse::Ok().json(RegistrationDetailResponse {
         registration,
@@ -502,13 +498,13 @@ pub async fn update_role_rankings(
             }
         })?;
 
-    log_audit_event(
+    log_event(
         &db,
         &AuditActor {
             user_id,
             battletag: user.battletag.clone(),
         },
-        audit_kinds::REGISTRATION_ROLE_RANKINGS_UPDATED,
+        kinds::REGISTRATION_ROLE_RANKINGS_UPDATED,
         registration_id,
         Some(tournament_id),
         json!({

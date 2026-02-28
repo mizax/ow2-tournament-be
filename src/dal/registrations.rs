@@ -124,6 +124,11 @@ pub struct RegistrationManagerDetail {
     pub role_rankings: Vec<RegistrationRoleRanking>,
 }
 
+pub struct RegistrationStatusUpdateResult {
+    pub old_status: RegistrationStatus,
+    pub updated: RegistrationRow,
+}
+
 #[derive(Debug)]
 pub struct RegistrationDetails {
     pub tournament_id: i64,
@@ -892,23 +897,6 @@ impl RegistrationsRepo {
         }))
     }
 
-    pub async fn get_status(
-        &self,
-        registration_id: i64,
-    ) -> Result<Option<RegistrationStatus>, sqlx::Error> {
-        sqlx::query_scalar::<_, RegistrationStatus>(
-            r#"
-            SELECT status
-            FROM registrations
-            WHERE id = ?1
-            LIMIT 1
-            "#,
-        )
-        .bind(registration_id)
-        .fetch_optional(&self.pool)
-        .await
-    }
-
     pub async fn get_tournament_id(
         &self,
         registration_id: i64,
@@ -997,7 +985,7 @@ impl RegistrationsRepo {
         decline_reason: Option<String>,
         requested_action_description: Option<String>,
         manager_user_id: i64,
-    ) -> Result<RegistrationRow, sqlx::Error> {
+    ) -> Result<RegistrationStatusUpdateResult, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
 
         let updated = self
@@ -1023,10 +1011,23 @@ impl RegistrationsRepo {
         decline_reason: Option<String>,
         requested_action_description: Option<String>,
         manager_user_id: i64,
-    ) -> Result<RegistrationRow, sqlx::Error>
+    ) -> Result<RegistrationStatusUpdateResult, sqlx::Error>
     where
         for<'c> &'c mut E: Executor<'c, Database = Sqlite>,
     {
+        let old_status = sqlx::query_scalar::<_, RegistrationStatus>(
+            r#"
+            SELECT status
+            FROM registrations
+            WHERE id = ?1
+            LIMIT 1
+            "#,
+        )
+        .bind(registration_id)
+        .fetch_optional(&mut *executor)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
+
         sqlx::query(
             r#"
             UPDATE registrations
@@ -1138,7 +1139,10 @@ impl RegistrationsRepo {
         .fetch_one(&mut *executor)
         .await?;
 
-        Ok(updated)
+        Ok(RegistrationStatusUpdateResult {
+            old_status,
+            updated,
+        })
     }
 
     pub async fn replace_role_rankings(

@@ -10,9 +10,8 @@ use crate::api::error::ApiError;
 use crate::dal::{
     Dal, ManagedTournamentRow, MatchWithTeamsRow, TournamentDetailsData, UpdateTournamentData,
 };
-use crate::services::{
-    AuditActor, ChangedFields, audit_insert_serialized_change_if_changed, audit_kinds,
-    log_audit_event,
+use crate::services::audit_service::{
+    AuditActor, ChangedFields, insert_serialized_change_if_changed, kinds, log_event,
 };
 use crate::shared_models::tournaments::models::*;
 
@@ -238,21 +237,21 @@ async fn update_tournament_impl(
     let old_discipline = existing.discipline.clone();
     let old_format = existing.format.clone();
     let mut changed_fields = ChangedFields::new();
-    audit_insert_serialized_change_if_changed(&mut changed_fields, "title", &old_title, &title);
-    audit_insert_serialized_change_if_changed(
+    insert_serialized_change_if_changed(&mut changed_fields, "title", &old_title, &title);
+    insert_serialized_change_if_changed(
         &mut changed_fields,
         "sef_title",
         &old_sef_title,
         &sef_title,
     );
-    audit_insert_serialized_change_if_changed(
+    insert_serialized_change_if_changed(
         &mut changed_fields,
         "discipline",
         &old_discipline,
         &discipline,
     );
-    audit_insert_serialized_change_if_changed(&mut changed_fields, "format", &old_format, &format);
-    audit_insert_serialized_change_if_changed(
+    insert_serialized_change_if_changed(&mut changed_fields, "format", &old_format, &format);
+    insert_serialized_change_if_changed(
         &mut changed_fields,
         "status",
         &existing.config.status,
@@ -327,13 +326,13 @@ async fn update_tournament_impl(
         .await
         .map_err(map_tournament_repo_error)?;
 
-    log_audit_event(
+    log_event(
         &db,
         &AuditActor {
             user_id,
             battletag: user.battletag.clone(),
         },
-        audit_kinds::TOURNAMENT_UPDATED,
+        kinds::TOURNAMENT_UPDATED,
         tournament_id,
         Some(tournament_id),
         json!({ "changed_fields": changed_fields }),
@@ -495,37 +494,9 @@ mod tests {
     use crate::api::auth::jwt::{AuthenticatedUser, UserRole};
     use crate::dal::Dal;
     use crate::shared_models::tournaments::models::{PrizePool, TournamentConfig};
+    use crate::test_helpers::TestDb;
     use sqlx::SqlitePool;
-    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
     use std::sync::Arc;
-
-    struct TestDb {
-        _dir: tempfile::TempDir,
-        pool: SqlitePool,
-    }
-
-    impl TestDb {
-        async fn new() -> Self {
-            let dir = tempfile::tempdir().expect("tempdir");
-            let db_path = dir.path().join("test.sqlite");
-            let options = SqliteConnectOptions::new()
-                .filename(&db_path)
-                .create_if_missing(true)
-                .journal_mode(SqliteJournalMode::Wal);
-            let pool = SqlitePoolOptions::new()
-                .max_connections(1)
-                .connect_with(options)
-                .await
-                .expect("connect sqlite");
-
-            sqlx::migrate!("src/migrations")
-                .run(&pool)
-                .await
-                .expect("run migrations");
-
-            Self { _dir: dir, pool }
-        }
-    }
 
     async fn insert_tournament(pool: &SqlitePool) -> i64 {
         sqlx::query(

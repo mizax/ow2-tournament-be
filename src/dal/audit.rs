@@ -38,6 +38,21 @@ pub struct AuditLogRow {
 }
 
 impl AuditDal {
+    fn push_filters(builder: &mut QueryBuilder<'_, Sqlite>, filter: &AuditFilter) {
+        if let Some(entity_type) = filter.entity_type.clone() {
+            builder.push(" AND entity_type = ");
+            builder.push_bind(entity_type);
+        }
+        if let Some(entity_id) = filter.entity_id {
+            builder.push(" AND entity_id = ");
+            builder.push_bind(entity_id);
+        }
+        if let Some(tournament_id) = filter.tournament_id {
+            builder.push(" AND tournament_id = ");
+            builder.push_bind(tournament_id);
+        }
+    }
+
     pub fn new(pool: Pool<Sqlite>) -> Self {
         Self { pool }
     }
@@ -72,7 +87,7 @@ impl AuditDal {
 
     pub async fn list(&self, filter: AuditFilter) -> Result<(Vec<AuditLogRow>, i64), sqlx::Error> {
         let page = filter.page.max(1);
-        let per_page = filter.per_page.max(1);
+        let per_page = filter.per_page.clamp(1, 200);
         let offset = (page - 1) * per_page;
 
         let mut total_builder = QueryBuilder::new(
@@ -82,18 +97,7 @@ impl AuditDal {
             WHERE 1 = 1
             "#,
         );
-        if let Some(entity_type) = filter.entity_type.as_deref() {
-            total_builder.push(" AND entity_type = ");
-            total_builder.push_bind(entity_type);
-        }
-        if let Some(entity_id) = filter.entity_id {
-            total_builder.push(" AND entity_id = ");
-            total_builder.push_bind(entity_id);
-        }
-        if let Some(tournament_id) = filter.tournament_id {
-            total_builder.push(" AND tournament_id = ");
-            total_builder.push_bind(tournament_id);
-        }
+        Self::push_filters(&mut total_builder, &filter);
         let total = total_builder
             .build_query_scalar::<i64>()
             .fetch_one(&self.pool)
@@ -115,19 +119,8 @@ impl AuditDal {
             WHERE 1 = 1
             "#,
         );
-        if let Some(entity_type) = filter.entity_type.as_deref() {
-            items_builder.push(" AND entity_type = ");
-            items_builder.push_bind(entity_type);
-        }
-        if let Some(entity_id) = filter.entity_id {
-            items_builder.push(" AND entity_id = ");
-            items_builder.push_bind(entity_id);
-        }
-        if let Some(tournament_id) = filter.tournament_id {
-            items_builder.push(" AND tournament_id = ");
-            items_builder.push_bind(tournament_id);
-        }
-        items_builder.push(" ORDER BY created_at DESC LIMIT ");
+        Self::push_filters(&mut items_builder, &filter);
+        items_builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
         items_builder.push_bind(per_page);
         items_builder.push(" OFFSET ");
         items_builder.push_bind(offset);

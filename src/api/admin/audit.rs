@@ -62,8 +62,8 @@ async fn list_audit_impl(
         return Err(ApiError::Forbidden);
     }
 
-    let page = query.page.unwrap_or(1).max(1);
-    let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
+    let page = query.page.unwrap_or(1);
+    let per_page = query.per_page.unwrap_or(50);
 
     let entity_type = query
         .entity_type
@@ -129,37 +129,8 @@ async fn list_audit_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::TestDb;
     use actix_web::body::to_bytes;
-    use sqlx::SqlitePool;
-    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
-
-    struct TestDb {
-        _dir: tempfile::TempDir,
-        pool: SqlitePool,
-    }
-
-    impl TestDb {
-        async fn new() -> Self {
-            let dir = tempfile::tempdir().expect("tempdir");
-            let db_path = dir.path().join("test.sqlite");
-            let options = SqliteConnectOptions::new()
-                .filename(&db_path)
-                .create_if_missing(true)
-                .journal_mode(SqliteJournalMode::Wal);
-            let pool = SqlitePoolOptions::new()
-                .max_connections(1)
-                .connect_with(options)
-                .await
-                .expect("connect sqlite");
-
-            sqlx::migrate!("src/migrations")
-                .run(&pool)
-                .await
-                .expect("run migrations");
-
-            Self { _dir: dir, pool }
-        }
-    }
 
     #[actix_web::test]
     async fn list_audit_returns_403_for_non_admin() {
