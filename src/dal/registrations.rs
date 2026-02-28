@@ -892,6 +892,40 @@ impl RegistrationsRepo {
         }))
     }
 
+    pub async fn get_status(
+        &self,
+        registration_id: i64,
+    ) -> Result<Option<RegistrationStatus>, sqlx::Error> {
+        sqlx::query_scalar::<_, RegistrationStatus>(
+            r#"
+            SELECT status
+            FROM registrations
+            WHERE id = ?1
+            LIMIT 1
+            "#,
+        )
+        .bind(registration_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    pub async fn get_tournament_id(
+        &self,
+        registration_id: i64,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT tournament_id
+            FROM registrations
+            WHERE id = ?1
+            LIMIT 1
+            "#,
+        )
+        .bind(registration_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
     pub async fn create_comment(
         &self,
         registration_id: i64,

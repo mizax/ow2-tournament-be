@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, Responder, get, patch, post, web};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -11,7 +12,9 @@ use crate::dal::{
     RegistrationRow, RegistrationSortField, RegistrationStatus, RegistrationSummary, RoleValue,
     SortDirection,
 };
-use crate::services::{GeoIpInfo, GeoIpService};
+use crate::services::{
+    AuditActor, GeoIpInfo, GeoIpService, audit_change, audit_kinds, log_audit_event,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagerRegistration {
@@ -304,6 +307,22 @@ pub async fn update_status(
         return Err(ApiError::Forbidden);
     }
 
+    let old_status = db
+        .registrations
+        .get_status(registration_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to fetch current status for registration {}: {}",
+                registration_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?
+        .ok_or(ApiError::NotFound)?;
+
     let mut validation_errors = Vec::new();
     // if payload.status == RegistrationStatus::Declined {
     //     if payload
@@ -353,7 +372,7 @@ pub async fn update_status(
         .update_status_with_action(
             registration_id,
             payload.status,
-            decline_reason,
+            decline_reason.clone(),
             requested_action_description,
             user_id,
         )
@@ -381,8 +400,28 @@ pub async fn update_status(
         })?
         .ok_or(ApiError::NotFound)?;
 
+    let tournament_id = detail.registration.tournament_id;
     let mut registration = map_registration(detail.registration)?;
     registration.geo_ip = geo_ip_service.lookup_ip(&registration.ip_address).await;
+
+    log_audit_event(
+        &db,
+        &AuditActor {
+            user_id,
+            battletag: user.battletag.clone(),
+        },
+        audit_kinds::REGISTRATION_STATUS_CHANGED,
+        registration_id,
+        Some(tournament_id),
+        json!({
+            "status": audit_change(
+                serde_json::to_value(old_status).unwrap_or(serde_json::Value::Null),
+                serde_json::to_value(payload.status).unwrap_or(serde_json::Value::Null)
+            ),
+            "decline_reason": decline_reason
+        }),
+    )
+    .await;
 
     Ok(HttpResponse::Ok().json(RegistrationDetailResponse {
         registration,
@@ -409,6 +448,22 @@ pub async fn update_role_rankings(
     if !is_manager_for_registration(&db, user_id, registration_id).await? {
         return Err(ApiError::Forbidden);
     }
+
+    let tournament_id = db
+        .registrations
+        .get_tournament_id(registration_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to fetch tournament id for registration {}: {}",
+                registration_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?
+        .ok_or(ApiError::NotFound)?;
 
     let mut seen_roles = HashSet::new();
     let mut validation_errors = Vec::new();
@@ -446,6 +501,24 @@ pub async fn update_role_rankings(
                 error: e.to_string(),
             }
         })?;
+
+    log_audit_event(
+        &db,
+        &AuditActor {
+            user_id,
+            battletag: user.battletag.clone(),
+        },
+        audit_kinds::REGISTRATION_ROLE_RANKINGS_UPDATED,
+        registration_id,
+        Some(tournament_id),
+        json!({
+            "rankings": updated
+                .iter()
+                .map(|row| json!({ "role": row.role, "ranking": row.ranking }))
+                .collect::<Vec<_>>()
+        }),
+    )
+    .await;
 
     Ok(HttpResponse::Ok().json(updated))
 }

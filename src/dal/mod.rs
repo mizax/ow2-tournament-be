@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod dal;
 pub mod heroes;
 pub mod match_events;
@@ -11,6 +12,10 @@ pub mod tournament_managers;
 pub mod tournaments;
 pub mod users;
 
+pub use audit::AuditDal;
+pub use audit::AuditEntry;
+pub use audit::AuditFilter;
+pub use audit::AuditLogRow;
 pub use dal::Dal;
 pub use heroes::HeroesRepo;
 pub use match_events::MatchEventsRepo;

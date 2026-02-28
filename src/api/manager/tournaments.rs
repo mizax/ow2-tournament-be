@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, Responder, get, put, web};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -8,6 +9,10 @@ use crate::api::auth::jwt::{AuthenticatedUser, UserRole};
 use crate::api::error::ApiError;
 use crate::dal::{
     Dal, ManagedTournamentRow, MatchWithTeamsRow, TournamentDetailsData, UpdateTournamentData,
+};
+use crate::services::{
+    AuditActor, ChangedFields, audit_insert_serialized_change_if_changed, audit_kinds,
+    log_audit_event,
 };
 use crate::shared_models::tournaments::models::*;
 
@@ -160,6 +165,15 @@ pub async fn update_tournament(
     payload: web::Json<UpdateTournamentRequest>,
     db: web::Data<Arc<Dal>>,
 ) -> actix_web::Result<impl Responder, ApiError> {
+    update_tournament_impl(user, path, payload, db).await
+}
+
+async fn update_tournament_impl(
+    user: AuthenticatedUser,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateTournamentRequest>,
+    db: web::Data<Arc<Dal>>,
+) -> actix_web::Result<HttpResponse, ApiError> {
     let tournament_id = path.into_inner();
     let user_id = parse_user_id(&user)?;
     let request = payload.into_inner();
@@ -218,6 +232,32 @@ pub async fn update_tournament(
         media,
         markdown,
     } = request;
+
+    let old_title = existing.title.clone();
+    let old_sef_title = existing.sef_title.clone();
+    let old_discipline = existing.discipline.clone();
+    let old_format = existing.format.clone();
+    let mut changed_fields = ChangedFields::new();
+    audit_insert_serialized_change_if_changed(&mut changed_fields, "title", &old_title, &title);
+    audit_insert_serialized_change_if_changed(
+        &mut changed_fields,
+        "sef_title",
+        &old_sef_title,
+        &sef_title,
+    );
+    audit_insert_serialized_change_if_changed(
+        &mut changed_fields,
+        "discipline",
+        &old_discipline,
+        &discipline,
+    );
+    audit_insert_serialized_change_if_changed(&mut changed_fields, "format", &old_format, &format);
+    audit_insert_serialized_change_if_changed(
+        &mut changed_fields,
+        "status",
+        &existing.config.status,
+        &status,
+    );
 
     let unique_dates: BTreeSet<String> = schedule
         .iter()
@@ -286,6 +326,19 @@ pub async fn update_tournament(
         )
         .await
         .map_err(map_tournament_repo_error)?;
+
+    log_audit_event(
+        &db,
+        &AuditActor {
+            user_id,
+            battletag: user.battletag.clone(),
+        },
+        audit_kinds::TOURNAMENT_UPDATED,
+        tournament_id,
+        Some(tournament_id),
+        json!({ "changed_fields": changed_fields }),
+    )
+    .await;
 
     let updated = db
         .tournaments
@@ -439,7 +492,86 @@ fn map_managed_tournament(row: ManagedTournamentRow) -> ManagedTournamentRespons
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::auth::jwt::{AuthenticatedUser, UserRole};
+    use crate::dal::Dal;
     use crate::shared_models::tournaments::models::{PrizePool, TournamentConfig};
+    use sqlx::SqlitePool;
+    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+    use std::sync::Arc;
+
+    struct TestDb {
+        _dir: tempfile::TempDir,
+        pool: SqlitePool,
+    }
+
+    impl TestDb {
+        async fn new() -> Self {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let db_path = dir.path().join("test.sqlite");
+            let options = SqliteConnectOptions::new()
+                .filename(&db_path)
+                .create_if_missing(true)
+                .journal_mode(SqliteJournalMode::Wal);
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(options)
+                .await
+                .expect("connect sqlite");
+
+            sqlx::migrate!("src/migrations")
+                .run(&pool)
+                .await
+                .expect("run migrations");
+
+            Self { _dir: dir, pool }
+        }
+    }
+
+    async fn insert_tournament(pool: &SqlitePool) -> i64 {
+        sqlx::query(
+            r#"
+            INSERT INTO tournaments (
+                title, sef_title, discipline, format, dates_json, prize_pool_total_amount, prize_pool_currency
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "#,
+        )
+        .bind("Old title")
+        .bind("old-title")
+        .bind("ow2")
+        .bind("online")
+        .bind(r#"["2026-02-01"]"#)
+        .bind(0.0_f64)
+        .bind("")
+        .execute(pool)
+        .await
+        .expect("insert tournament");
+
+        let id: i64 = sqlx::query_scalar("SELECT last_insert_rowid()")
+            .fetch_one(pool)
+            .await
+            .expect("last_insert_rowid");
+
+        let config_json = serde_json::json!({
+            "type": "Online Tournament",
+            "schedule": [{"day":1,"date":"2026-02-01","stage":"Main","start_time":"16:00"}],
+            "prize_pool": {}
+        })
+        .to_string();
+
+        sqlx::query(
+            r#"
+            INSERT INTO tournament_configuration (tournament_id, configuration_json)
+            VALUES (?1, ?2)
+            "#,
+        )
+        .bind(id)
+        .bind(config_json)
+        .execute(pool)
+        .await
+        .expect("insert tournament config");
+
+        id
+    }
 
     #[test]
     fn tournament_full_response_omits_null_optional_fields() {
@@ -482,6 +614,95 @@ mod tests {
                 .as_object()
                 .expect("results object")
                 .contains_key("mvp")
+        );
+    }
+
+    #[actix_web::test]
+    async fn update_tournament_writes_audit_log() {
+        let db = TestDb::new().await;
+        let tournament_id = insert_tournament(&db.pool).await;
+        let dal = Arc::new(Dal::from_pool(db.pool.clone()));
+
+        let payload = UpdateTournamentRequest {
+            title: "New title".to_string(),
+            sef_title: "old-title".to_string(),
+            discipline: "ow2".to_string(),
+            format: "online".to_string(),
+            type_: "Online Tournament".to_string(),
+            organizers: None,
+            rules: None,
+            eligibility: None,
+            registration: None,
+            teams: None,
+            schedule: vec![ScheduleItem {
+                day: 1,
+                date: chrono::NaiveDate::from_ymd_opt(2026, 2, 1).expect("valid date"),
+                stage: "Main".to_string(),
+                start_time: "16:00".to_string(),
+            }],
+            match_format: None,
+            prize_pool: PrizePool {
+                currency: None,
+                places: None,
+            },
+            stream: None,
+            status: None,
+            results: None,
+            media: None,
+            markdown: None,
+        };
+
+        let response = update_tournament_impl(
+            AuthenticatedUser {
+                id: "777".to_string(),
+                battletag: "Admin#7777".to_string(),
+                roles: vec![UserRole::Admin],
+            },
+            web::Path::from(tournament_id),
+            web::Json(payload),
+            web::Data::new(dal),
+        )
+        .await
+        .expect("update tournament");
+        assert_eq!(response.status(), 200);
+
+        let action: String = sqlx::query_scalar(
+            r#"
+            SELECT action
+            FROM audit_log
+            WHERE entity_type = 'tournament' AND entity_id = ?1
+            ORDER BY id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(tournament_id)
+        .fetch_one(&db.pool)
+        .await
+        .expect("select action");
+        assert_eq!(action, "tournament.updated");
+
+        let details_json: String = sqlx::query_scalar(
+            r#"
+            SELECT details_json
+            FROM audit_log
+            WHERE entity_type = 'tournament' AND entity_id = ?1
+            ORDER BY id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(tournament_id)
+        .fetch_one(&db.pool)
+        .await
+        .expect("select details_json");
+        let details: serde_json::Value =
+            serde_json::from_str(&details_json).expect("parse details_json");
+        assert_eq!(
+            details["changed_fields"]["title"]["old"],
+            serde_json::Value::String("Old title".to_string())
+        );
+        assert_eq!(
+            details["changed_fields"]["title"]["new"],
+            serde_json::Value::String("New title".to_string())
         );
     }
 }

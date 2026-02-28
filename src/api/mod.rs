@@ -1,3 +1,4 @@
+mod admin;
 pub mod auth;
 mod error;
 mod logs;
@@ -37,6 +38,7 @@ fn configure_private(cfg: &mut web::ServiceConfig) {
             .configure(logs::configure)
             .configure(tournaments::configure_private)
             .configure(registrations::configure)
-            .configure(manager::configure),
+            .configure(manager::configure)
+            .configure(admin::configure),
     );
 }
