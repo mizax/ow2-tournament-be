@@ -209,9 +209,14 @@ pub async fn save_events(
                 let player_id = fetch_player_id(db, &mut *tx, &team, &player_stat.player).await?;
                 let hero_id = fetch_hero_id(db, &mut *tx, &player_stat.hero).await?;
 
-                let prev = ctx.last_player_stats.get(&(player_id, hero_id)).map(|v| v.as_slice()).unwrap_or(&[]);
+                let prev = ctx
+                    .last_player_stats
+                    .get(&(player_id, hero_id))
+                    .map(|v| v.as_slice())
+                    .unwrap_or(&[]);
                 let delta_stats = compute_delta_stats(&player_stat.stats, prev);
-                ctx.last_player_stats.insert((player_id, hero_id), player_stat.stats.clone());
+                ctx.last_player_stats
+                    .insert((player_id, hero_id), player_stat.stats.clone());
 
                 db.match_player_statistics
                     .insert_with_executor(
@@ -330,7 +335,10 @@ const CUMULATIVE_SUM_INDICES: &[usize] = &[
 ];
 
 fn stat_as_f64(stats: &[String], i: usize) -> f64 {
-    stats.get(i).and_then(|s| s.trim().parse::<f64>().ok()).unwrap_or(0.0)
+    stats
+        .get(i)
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .unwrap_or(0.0)
 }
 
 fn delta_f64(current: &[String], prev: &[String], i: usize) -> f64 {
@@ -338,11 +346,19 @@ fn delta_f64(current: &[String], prev: &[String], i: usize) -> f64 {
 }
 
 fn fmt_delta(d: f64) -> String {
-    if d.fract() == 0.0 { format!("{}", d as i64) } else { format!("{}", d) }
+    if d.fract() == 0.0 {
+        format!("{}", d as i64)
+    } else {
+        format!("{}", d)
+    }
 }
 
 fn pct_of(num: f64, den: f64) -> String {
-    if den > 0.0 { format!("{:.2}", num / den * 100.0) } else { "0".to_string() }
+    if den > 0.0 {
+        format!("{:.2}", num / den * 100.0)
+    } else {
+        "0".to_string()
+    }
 }
 
 /// Convert Blizzard's cumulative player_stat snapshot into a per-round delta.
@@ -360,17 +376,25 @@ fn compute_delta_stats(current: &[String], prev: &[String]) -> Vec<String> {
     }
 
     // Recompute accuracy fields from delta shot counters.
-    let d_shots_fired        = delta_f64(current, prev, 26);
-    let d_shots_hit          = delta_f64(current, prev, 27);
+    let d_shots_fired = delta_f64(current, prev, 26);
+    let d_shots_hit = delta_f64(current, prev, 27);
     let d_scoped_shots_fired = delta_f64(current, prev, 29);
-    let d_scoped_shots_hit   = delta_f64(current, prev, 30);
-    let d_crit_hits          = delta_f64(current, prev, 21);
-    let d_scoped_crit_kills  = delta_f64(current, prev, 25);
+    let d_scoped_shots_hit = delta_f64(current, prev, 30);
+    let d_crit_hits = delta_f64(current, prev, 21);
+    let d_scoped_crit_kills = delta_f64(current, prev, 25);
 
-    if 22 < len { result[22] = pct_of(d_crit_hits, d_shots_fired); }         // critical_hit_accuracy
-    if 23 < len { result[23] = pct_of(d_scoped_shots_hit, d_scoped_shots_fired); } // scoped_accuracy
-    if 24 < len { result[24] = pct_of(d_scoped_crit_kills, d_scoped_shots_hit); }  // scoped_critical_hit_accuracy
-    if 31 < len { result[31] = pct_of(d_shots_hit, d_shots_fired); }          // weapon_accuracy
+    if 22 < len {
+        result[22] = pct_of(d_crit_hits, d_shots_fired);
+    } // critical_hit_accuracy
+    if 23 < len {
+        result[23] = pct_of(d_scoped_shots_hit, d_scoped_shots_fired);
+    } // scoped_accuracy
+    if 24 < len {
+        result[24] = pct_of(d_scoped_crit_kills, d_scoped_shots_hit);
+    } // scoped_critical_hit_accuracy
+    if 31 < len {
+        result[31] = pct_of(d_shots_hit, d_shots_fired);
+    } // weapon_accuracy
 
     result
 }
