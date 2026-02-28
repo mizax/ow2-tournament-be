@@ -234,4 +234,12 @@ pub struct TournamentShort {
     pub dates: Vec<String>,
     pub prize_pool: Option<String>,
     pub registration_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub podium: Option<Vec<TournamentPodiumPlace>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TournamentPodiumPlace {
+    pub place: i32,
+    pub team_name: String,
 }

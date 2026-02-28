@@ -2,7 +2,9 @@ use serde_json;
 use sqlx::{Error, Executor, Pool, Sqlite};
 use thiserror::Error as ThisError;
 
-use crate::shared_models::tournaments::models::TournamentConfig;
+use crate::shared_models::tournaments::models::{
+    TournamentConfig, TournamentPodiumPlace, TournamentResultPlace,
+};
 
 #[derive(Clone)]
 pub struct TournamentsRepo {
@@ -26,6 +28,7 @@ pub struct TournamentShortData {
     pub dates: Vec<String>,
     pub prize_pool: Option<String>,
     pub registration_count: i64,
+    pub podium: Option<Vec<TournamentPodiumPlace>>,
 }
 
 pub struct TournamentDetailsData {
@@ -64,6 +67,7 @@ struct TournamentShortRow {
     pub prize_pool_total_amount: f64,
     pub prize_pool_currency: String,
     pub registration_count: i64,
+    pub configuration_json: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -109,8 +113,11 @@ impl TournamentsRepo {
                 t.dates_json,
                 t.prize_pool_total_amount,
                 t.prize_pool_currency,
-                COUNT(r.id) AS registration_count
+                COUNT(r.id) AS registration_count,
+                tc.configuration_json
             FROM tournaments t
+            LEFT JOIN tournament_configuration tc
+                ON tc.tournament_id = t.id
             LEFT JOIN registrations r
                 ON r.tournament_id = t.id
                AND r.status NOT IN ('DELETED', 'DECLINED')
@@ -123,7 +130,8 @@ impl TournamentsRepo {
                 t.format,
                 t.dates_json,
                 t.prize_pool_total_amount,
-                t.prize_pool_currency
+                t.prize_pool_currency,
+                tc.configuration_json
             ORDER BY t.id
             "#,
         )
@@ -135,6 +143,12 @@ impl TournamentsRepo {
             let dates: Vec<String> = serde_json::from_str(&row.dates_json)?;
             let prize_pool =
                 format_prize_pool(row.prize_pool_total_amount, &row.prize_pool_currency);
+            let podium = row
+                .configuration_json
+                .as_deref()
+                .map(serde_json::from_str::<TournamentConfig>)
+                .transpose()?
+                .and_then(extract_podium);
 
             tournaments.push(TournamentShortData {
                 id: row.id,
@@ -145,6 +159,7 @@ impl TournamentsRepo {
                 dates,
                 prize_pool,
                 registration_count: row.registration_count,
+                podium,
             });
         }
 
@@ -370,6 +385,32 @@ impl TournamentsRepo {
         tx.commit().await?;
         Ok(())
     }
+}
+
+fn extract_podium(config: TournamentConfig) -> Option<Vec<TournamentPodiumPlace>> {
+    let mut podium = config
+        .results
+        .and_then(|results| results.placements)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(is_podium_place)
+        .map(|place| TournamentPodiumPlace {
+            place: place.place,
+            team_name: place.team_name,
+        })
+        .collect::<Vec<_>>();
+
+    podium.sort_by_key(|item| item.place);
+
+    if podium.is_empty() {
+        None
+    } else {
+        Some(podium)
+    }
+}
+
+fn is_podium_place(place: &TournamentResultPlace) -> bool {
+    (1..=3).contains(&place.place)
 }
 
 fn format_prize_pool(amount: f64, currency: &str) -> Option<String> {

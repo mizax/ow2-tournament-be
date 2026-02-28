@@ -95,6 +95,38 @@ async fn insert_tournament(
     tournament_id
 }
 
+async fn set_tournament_placements(
+    pool: &SqlitePool,
+    tournament_id: i64,
+    placements: serde_json::Value,
+) {
+    let config_json = serde_json::json!({
+        "type": "online",
+        "schedule": [],
+        "prize_pool": {
+            "currency": null,
+            "places": null
+        },
+        "results": {
+            "placements": placements
+        }
+    })
+    .to_string();
+
+    sqlx::query(
+        r#"
+        UPDATE tournament_configuration
+        SET configuration_json = ?1
+        WHERE tournament_id = ?2
+        "#,
+    )
+    .bind(config_json)
+    .bind(tournament_id)
+    .execute(pool)
+    .await
+    .expect("update tournament_configuration");
+}
+
 async fn insert_team(pool: &SqlitePool, tournament_id: i64, name: &str) -> i64 {
     sqlx::query(
         r#"
@@ -270,6 +302,62 @@ async fn get_tournaments_returns_list() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["uri"], "public-cup");
     assert_eq!(items[0]["prize_pool"], "50 USD");
+}
+
+#[actix_web::test]
+async fn get_tournaments_returns_podium_for_finished_data() {
+    let db = TestDb::new().await;
+    let tournament_id = insert_tournament(
+        &db.pool,
+        "Winners Cup",
+        "winners-cup",
+        "ow2",
+        "5v5",
+        r#"["2026-02-01"]"#,
+        50.0,
+        "USD",
+    )
+    .await;
+
+    set_tournament_placements(
+        &db.pool,
+        tournament_id,
+        serde_json::json!([
+            { "place": 2, "team_name": "Team Beta" },
+            { "place": 1, "team_name": "Team Alpha" },
+            { "place": 4, "team_name": "Team Delta" },
+            { "place": 3, "team_name": "Team Gamma" }
+        ]),
+    )
+    .await;
+
+    let dal = Dal::from_pool(db.pool.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(Arc::new(dal)))
+            .configure(api::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/public/v1/tournaments")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let body: Value = test::read_body_json(resp).await;
+    let items = body.as_array().expect("array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["uri"], "winners-cup");
+
+    let podium = items[0]["podium"].as_array().expect("podium array");
+    assert_eq!(podium.len(), 3);
+    assert_eq!(podium[0]["place"], 1);
+    assert_eq!(podium[0]["team_name"], "Team Alpha");
+    assert_eq!(podium[1]["place"], 2);
+    assert_eq!(podium[1]["team_name"], "Team Beta");
+    assert_eq!(podium[2]["place"], 3);
+    assert_eq!(podium[2]["team_name"], "Team Gamma");
 }
 
 #[actix_web::test]
