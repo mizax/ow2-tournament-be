@@ -60,6 +60,27 @@ pub fn insert_serialized_change_if_changed<T: serde::Serialize>(
     insert_change_if_changed(changed_fields, field, old_value, new_value);
 }
 
+pub fn diff_json_objects(old: &Value, new: &Value) -> ChangedFields {
+    let mut changed = ChangedFields::new();
+    let empty = serde_json::Map::new();
+    let old_obj = old.as_object().unwrap_or(&empty);
+    let new_obj = new.as_object().unwrap_or(&empty);
+    let all_keys = old_obj
+        .keys()
+        .chain(new_obj.keys())
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for key in all_keys {
+        let old_val = old_obj.get(key).cloned().unwrap_or(Value::Null);
+        let new_val = new_obj.get(key).cloned().unwrap_or(Value::Null);
+        if old_val != new_val {
+            changed.insert(key.clone(), change(old_val, new_val));
+        }
+    }
+
+    changed
+}
+
 pub async fn log_event(
     db: &Dal,
     actor: &AuditActor,

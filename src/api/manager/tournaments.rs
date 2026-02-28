@@ -11,7 +11,8 @@ use crate::dal::{
     Dal, ManagedTournamentRow, MatchWithTeamsRow, TournamentDetailsData, UpdateTournamentData,
 };
 use crate::services::audit_service::{
-    AuditActor, ChangedFields, insert_serialized_change_if_changed, kinds, log_event,
+    AuditActor, ChangedFields, diff_json_objects, insert_serialized_change_if_changed, kinds,
+    log_event,
 };
 use crate::shared_models::tournaments::models::*;
 
@@ -236,6 +237,8 @@ async fn update_tournament_impl(
     let old_sef_title = existing.sef_title.clone();
     let old_discipline = existing.discipline.clone();
     let old_format = existing.format.clone();
+    let old_config_value =
+        serde_json::to_value(&existing.config).unwrap_or(serde_json::Value::Null);
     let mut changed_fields = ChangedFields::new();
     insert_serialized_change_if_changed(&mut changed_fields, "title", &old_title, &title);
     insert_serialized_change_if_changed(
@@ -251,12 +254,6 @@ async fn update_tournament_impl(
         &discipline,
     );
     insert_serialized_change_if_changed(&mut changed_fields, "format", &old_format, &format);
-    insert_serialized_change_if_changed(
-        &mut changed_fields,
-        "status",
-        &existing.config.status,
-        &status,
-    );
 
     let unique_dates: BTreeSet<String> = schedule
         .iter()
@@ -297,6 +294,8 @@ async fn update_tournament_impl(
         media,
         markdown,
     };
+    let new_config_value = serde_json::to_value(&config).unwrap_or(serde_json::Value::Null);
+    changed_fields.extend(diff_json_objects(&old_config_value, &new_config_value));
 
     let configuration_json = serde_json::to_string(&config).map_err(|e| {
         log::error!(
@@ -674,6 +673,93 @@ mod tests {
         assert_eq!(
             details["changed_fields"]["title"]["new"],
             serde_json::Value::String("New title".to_string())
+        );
+    }
+
+    #[actix_web::test]
+    async fn update_tournament_writes_config_field_diffs_to_audit_log() {
+        let db = TestDb::new().await;
+        let tournament_id = insert_tournament(&db.pool).await;
+        let dal = Arc::new(Dal::from_pool(db.pool.clone()));
+
+        let payload = UpdateTournamentRequest {
+            title: "Old title".to_string(),
+            sef_title: "old-title".to_string(),
+            discipline: "ow2".to_string(),
+            format: "online".to_string(),
+            type_: "Online Tournament".to_string(),
+            organizers: Some(vec![Organizer {
+                role: "Admin".to_string(),
+                name: "Alice".to_string(),
+                contact: Some("@alice".to_string()),
+            }]),
+            rules: None,
+            eligibility: None,
+            registration: None,
+            teams: None,
+            schedule: vec![ScheduleItem {
+                day: 2,
+                date: chrono::NaiveDate::from_ymd_opt(2026, 2, 2).expect("valid date"),
+                stage: "Playoffs".to_string(),
+                start_time: "18:00".to_string(),
+            }],
+            match_format: None,
+            prize_pool: PrizePool {
+                currency: None,
+                places: None,
+            },
+            stream: None,
+            status: None,
+            results: None,
+            media: None,
+            markdown: None,
+        };
+
+        let response = update_tournament_impl(
+            AuthenticatedUser {
+                id: "777".to_string(),
+                battletag: "Admin#7777".to_string(),
+                roles: vec![UserRole::Admin],
+            },
+            web::Path::from(tournament_id),
+            web::Json(payload),
+            web::Data::new(dal),
+        )
+        .await
+        .expect("update tournament");
+        assert_eq!(response.status(), 200);
+
+        let details_json: String = sqlx::query_scalar(
+            r#"
+            SELECT details_json
+            FROM audit_log
+            WHERE entity_type = 'tournament' AND entity_id = ?1
+            ORDER BY id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(tournament_id)
+        .fetch_one(&db.pool)
+        .await
+        .expect("select details_json");
+        let details: serde_json::Value =
+            serde_json::from_str(&details_json).expect("parse details_json");
+
+        assert_eq!(
+            details["changed_fields"]["organizers"]["old"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            details["changed_fields"]["organizers"]["new"][0]["name"],
+            serde_json::Value::String("Alice".to_string())
+        );
+        assert_eq!(
+            details["changed_fields"]["schedule"]["old"][0]["date"],
+            serde_json::Value::String("2026-02-01".to_string())
+        );
+        assert_eq!(
+            details["changed_fields"]["schedule"]["new"][0]["date"],
+            serde_json::Value::String("2026-02-02".to_string())
         );
     }
 }
