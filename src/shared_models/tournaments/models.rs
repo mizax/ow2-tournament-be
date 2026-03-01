@@ -117,9 +117,11 @@ pub struct Stream {
     pub channel: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
 pub enum TournamentStatus {
+    Draft,
     Upcoming,
     Ongoing,
     Finished,
@@ -185,8 +187,7 @@ pub struct Tournament {
     pub prize_pool: PrizePool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<Stream>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TournamentStatus>,
+    pub status: TournamentStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<TournamentResults>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -215,8 +216,6 @@ pub struct TournamentConfig {
     pub prize_pool: PrizePool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<Stream>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TournamentStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<TournamentResults>,
     #[serde(skip_serializing_if = "Option::is_none")]

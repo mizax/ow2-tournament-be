@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, get, put, web};
+use actix_web::{HttpResponse, Responder, get, post, put, web};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -26,6 +26,7 @@ struct ManagedTournamentResponse {
     pub start_at: Option<NaiveDateTime>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub registration_count: Option<i64>,
+    pub status: TournamentStatus,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,6 +63,20 @@ pub struct UpdateTournamentRequest {
     pub markdown: Option<Markdown>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateTournamentRequest {
+    pub title: String,
+    pub sef_title: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateTournamentResponse {
+    pub id: i64,
+    pub title: String,
+    pub sef_title: String,
+    pub status: TournamentStatus,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TournamentFullResponse {
     pub id: i64,
@@ -87,8 +102,7 @@ pub struct TournamentFullResponse {
     pub prize_pool: PrizePool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<Stream>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TournamentStatus>,
+    pub status: TournamentStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<TournamentResults>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +115,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/tournaments")
             .service(list_managed_tournaments)
+            .service(create_tournament)
             .service(get_managed_tournament)
             .service(update_tournament)
             .service(list_tournament_matches),
@@ -135,6 +150,68 @@ pub async fn list_managed_tournaments(
         .collect::<Vec<_>>();
 
     Ok(HttpResponse::Ok().json(response))
+}
+
+#[post("")]
+pub async fn create_tournament(
+    user: AuthenticatedUser,
+    payload: web::Json<CreateTournamentRequest>,
+    db: web::Data<Arc<Dal>>,
+) -> actix_web::Result<impl Responder, ApiError> {
+    let user_id = parse_user_id(&user)?;
+    if !user.has_authority("create_tournament") {
+        return Err(ApiError::Forbidden);
+    }
+
+    let title = payload.title.trim().to_string();
+    let sef_title = payload.sef_title.trim().to_string();
+    if title.is_empty() || sef_title.is_empty() {
+        return Err(ApiError::BadRequest {
+            error: "invalid_payload".to_string(),
+            details: "title and sef_title must not be empty".to_string(),
+        });
+    }
+
+    let tournament_id = db
+        .tournaments
+        .create(&title, &sef_title)
+        .await
+        .map_err(map_tournament_repo_error)?;
+
+    db.tournament_managers
+        .add_manager(tournament_id, user_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to add user {} as manager for tournament {}: {}",
+                user_id,
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?;
+
+    log_event(
+        &db,
+        &AuditActor {
+            user_id,
+            battletag: user.battletag.clone(),
+        },
+        kinds::TOURNAMENT_CREATED,
+        tournament_id,
+        Some(tournament_id),
+        json!({ "title": title, "sef_title": sef_title, "status": "draft" }),
+    )
+    .await;
+
+    Ok(HttpResponse::Created().json(CreateTournamentResponse {
+        id: tournament_id,
+        title,
+        sef_title,
+        status: TournamentStatus::Draft,
+    }))
 }
 
 #[get("/{tournament_id}")]
@@ -233,6 +310,8 @@ async fn update_tournament_impl(
         markdown,
     } = request;
 
+    let new_status = status.unwrap_or_else(|| existing.status.clone());
+
     let old_title = existing.title.clone();
     let old_sef_title = existing.sef_title.clone();
     let old_discipline = existing.discipline.clone();
@@ -254,6 +333,7 @@ async fn update_tournament_impl(
         &discipline,
     );
     insert_serialized_change_if_changed(&mut changed_fields, "format", &old_format, &format);
+    insert_serialized_change_if_changed(&mut changed_fields, "status", &existing.status, &new_status);
 
     let unique_dates: BTreeSet<String> = schedule
         .iter()
@@ -289,7 +369,6 @@ async fn update_tournament_impl(
         match_format,
         prize_pool,
         stream,
-        status,
         results,
         media,
         markdown,
@@ -320,6 +399,7 @@ async fn update_tournament_impl(
                 prize_pool_total_amount,
                 prize_pool_currency,
                 configuration_json,
+                status: new_status,
             },
         )
         .await
@@ -393,7 +473,7 @@ fn map_tournament_full_response(row: TournamentDetailsData) -> TournamentFullRes
         match_format: row.config.match_format,
         prize_pool: row.config.prize_pool,
         stream: row.config.stream,
-        status: row.config.status,
+        status: row.status,
         results: row.config.results,
         media: row.config.media,
         markdown: row.config.markdown,
@@ -484,6 +564,7 @@ fn map_managed_tournament(row: ManagedTournamentRow) -> ManagedTournamentRespons
         sef,
         start_at: row.started_at,
         registration_count: Some(row.registration_count),
+        status: row.status,
     }
 }
 
@@ -551,6 +632,7 @@ mod tests {
             sef_title: "test".to_string(),
             discipline: "OW2".to_string(),
             format: "Online".to_string(),
+            status: TournamentStatus::Draft,
             config: TournamentConfig {
                 type_: "Online".to_string(),
                 organizers: None,
@@ -565,7 +647,6 @@ mod tests {
                     places: None,
                 },
                 stream: None,
-                status: None,
                 results: Some(TournamentResults {
                     placements: None,
                     mvp: None,
@@ -627,6 +708,7 @@ mod tests {
                 id: "777".to_string(),
                 battletag: "Admin#7777".to_string(),
                 roles: vec![UserRole::Admin],
+                authorities: vec![],
             },
             web::Path::from(tournament_id),
             web::Json(payload),
@@ -720,6 +802,7 @@ mod tests {
                 id: "777".to_string(),
                 battletag: "Admin#7777".to_string(),
                 roles: vec![UserRole::Admin],
+                authorities: vec![],
             },
             web::Path::from(tournament_id),
             web::Json(payload),

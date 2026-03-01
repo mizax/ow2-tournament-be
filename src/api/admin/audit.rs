@@ -141,6 +141,7 @@ mod tests {
             id: "10".to_string(),
             battletag: "User#1234".to_string(),
             roles: vec![UserRole::NormalUser],
+            authorities: vec![],
         };
 
         let result = list_audit_impl(
@@ -185,6 +186,7 @@ mod tests {
             id: "42".to_string(),
             battletag: "Admin#0001".to_string(),
             roles: vec![UserRole::Admin],
+            authorities: vec![],
         };
 
         let response = list_audit_impl(

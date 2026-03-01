@@ -6,6 +6,7 @@ use ow2_tournament_be::dal::{
     RegistrationsRepo, RoleValue, TeamsRepo, TournamentManagersRepo, TournamentsRepo,
     UpdateTournamentData, UsersRepo,
 };
+use ow2_tournament_be::shared_models::tournaments::models::TournamentStatus;
 
 struct TestDb {
     _dir: tempfile::TempDir,
@@ -48,8 +49,8 @@ async fn insert_tournament(
     sqlx::query(
         r#"
         INSERT INTO tournaments (
-            title, sef_title, discipline, format, dates_json, prize_pool_total_amount, prize_pool_currency
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            title, sef_title, discipline, format, dates_json, prize_pool_total_amount, prize_pool_currency, status
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'upcoming')
         "#,
     )
     .bind(title)
@@ -759,6 +760,7 @@ async fn tournaments_update_changes_title_and_config() {
                 prize_pool_total_amount: 50000.0,
                 prize_pool_currency: "RUB".into(),
                 configuration_json: r#"{"type":"Online","schedule":[],"prize_pool":{"currency":"RUB","places":[{"place":1,"amount":50000}]}}"#.into(),
+                status: TournamentStatus::Upcoming,
             },
         )
         .await
@@ -808,6 +810,7 @@ async fn tournaments_update_is_atomic_on_config_failure() {
                 prize_pool_total_amount: 200.0,
                 prize_pool_currency: "RUB".into(),
                 configuration_json: r#"{"type":"Online","schedule":[],"prize_pool":{}}"#.into(),
+                status: TournamentStatus::Upcoming,
             },
         )
         .await;
@@ -851,6 +854,7 @@ async fn tournaments_update_upserts_config_when_missing() {
                 prize_pool_currency: "RUB".into(),
                 configuration_json:
                     r#"{"type":"Online","schedule":[],"prize_pool":{"currency":"RUB"}}"#.into(),
+                status: TournamentStatus::Upcoming,
             },
         )
         .await

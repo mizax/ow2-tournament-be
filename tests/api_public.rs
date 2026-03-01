@@ -50,8 +50,8 @@ async fn insert_tournament(
     sqlx::query(
         r#"
         INSERT INTO tournaments (
-            title, sef_title, discipline, format, dates_json, prize_pool_total_amount, prize_pool_currency
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            title, sef_title, discipline, format, dates_json, prize_pool_total_amount, prize_pool_currency, status
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'upcoming')
         "#,
     )
     .bind(title)

@@ -32,6 +32,21 @@ pub mod kinds {
         action: "registration.role_rankings_updated",
         entity_type: "registration",
     };
+
+    pub const USER_AUTHORITY_GRANTED: AuditKind = AuditKind {
+        action: "user.authority_granted",
+        entity_type: "user",
+    };
+
+    pub const USER_AUTHORITY_REVOKED: AuditKind = AuditKind {
+        action: "user.authority_revoked",
+        entity_type: "user",
+    };
+
+    pub const TOURNAMENT_CREATED: AuditKind = AuditKind {
+        action: "tournament.created",
+        entity_type: "tournament",
+    };
 }
 
 pub fn insert_change_if_changed(

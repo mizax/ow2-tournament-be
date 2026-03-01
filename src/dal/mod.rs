@@ -49,5 +49,7 @@ pub use tournaments::TournamentsRepo;
 pub use tournaments::TournamentsRepoError;
 pub use tournaments::UpdateTournamentData;
 pub use users::User;
+pub use users::UserAuthorityRow;
 pub use users::UserBattletag;
+pub use users::UserWithBattletagRow;
 pub use users::UsersRepo;

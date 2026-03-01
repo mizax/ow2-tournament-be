@@ -72,7 +72,7 @@ pub async fn get_tournament(
         match_format: row.config.match_format,
         prize_pool: row.config.prize_pool,
         stream: row.config.stream,
-        status: row.config.status,
+        status: row.status,
         results: row.config.results,
         media: row.config.media,
         markdown: row.config.markdown,

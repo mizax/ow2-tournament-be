@@ -24,6 +24,7 @@ pub struct AuthenticatedUser {
     pub id: String,
     pub battletag: String,
     pub roles: Vec<UserRole>,
+    pub authorities: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::Type, PartialEq)]
@@ -34,6 +35,16 @@ pub enum UserRole {
     TournamentManager,
     #[serde(rename = "normal_user")]
     NormalUser,
+}
+
+impl AuthenticatedUser {
+    pub fn has_authority(&self, authority: &str) -> bool {
+        self.is_admin() || self.authorities.iter().any(|a| a == authority)
+    }
+
+    pub fn is_admin(&self) -> bool {
+        self.roles.contains(&UserRole::Admin)
+    }
 }
 
 pub async fn validate_token(
@@ -122,10 +133,20 @@ impl FromRequest for AuthenticatedUser {
                 roles.push(UserRole::TournamentManager);
             }
 
+            let authorities = db
+                .users
+                .list_authorities_for_user(user_id)
+                .await
+                .map_err(|e| {
+                    error!("Failed to load authorities for user {}: {:?}", user_id, e);
+                    ErrorUnauthorized("Invalid user")
+                })?;
+
             Ok(AuthenticatedUser {
                 id: claims.sub,
                 battletag: claims.battle_tag,
                 roles,
+                authorities,
             })
         })
     }

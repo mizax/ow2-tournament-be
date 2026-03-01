@@ -1,6 +1,8 @@
 use chrono::NaiveDateTime;
 use sqlx::{Executor, Pool, Sqlite};
 
+use crate::shared_models::tournaments::models::TournamentStatus;
+
 #[derive(Clone)]
 pub struct TournamentManagersRepo {
     pool: Pool<Sqlite>,
@@ -11,6 +13,7 @@ pub struct ManagedTournamentRow {
     pub id: i64,
     pub title: String,
     pub sef_title: String,
+    pub status: TournamentStatus,
     pub started_at: Option<NaiveDateTime>,
     pub registration_count: i64,
 }
@@ -145,6 +148,7 @@ impl TournamentManagersRepo {
                 t.id,
                 t.title,
                 t.sef_title,
+                t.status,
                 t.started_at,
                 COUNT(r.id) AS registration_count
             FROM tournaments t
@@ -155,12 +159,40 @@ impl TournamentManagersRepo {
                AND r.status != 'DELETED'
             WHERE tm.user_id = ?1
               AND t.deleted_at IS NULL
-            GROUP BY t.id, t.title, t.sef_title, t.started_at
+            GROUP BY t.id, t.title, t.sef_title, t.status, t.started_at
             ORDER BY t.id
             "#,
         )
         .bind(user_id)
         .fetch_all(executor)
         .await
+    }
+
+    pub async fn add_manager(&self, tournament_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
+        self.add_manager_with_executor(&self.pool, tournament_id, user_id)
+            .await
+    }
+
+    pub async fn add_manager_with_executor<'e, E>(
+        &self,
+        executor: E,
+        tournament_id: i64,
+        user_id: i64,
+    ) -> Result<(), sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO tournament_managers (tournament_id, user_id)
+            VALUES (?1, ?2)
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(user_id)
+        .execute(executor)
+        .await?;
+
+        Ok(())
     }
 }

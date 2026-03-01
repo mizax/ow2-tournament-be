@@ -3,7 +3,7 @@ use sqlx::{Error, Executor, Pool, Sqlite};
 use thiserror::Error as ThisError;
 
 use crate::shared_models::tournaments::models::{
-    TournamentConfig, TournamentPodiumPlace, TournamentResultPlace,
+    TournamentConfig, TournamentPodiumPlace, TournamentResultPlace, TournamentStatus,
 };
 
 #[derive(Clone)]
@@ -37,6 +37,7 @@ pub struct TournamentDetailsData {
     pub sef_title: String,
     pub discipline: String,
     pub format: String,
+    pub status: TournamentStatus,
     pub config: TournamentConfig,
 }
 
@@ -54,6 +55,7 @@ pub struct UpdateTournamentData {
     pub prize_pool_total_amount: f64,
     pub prize_pool_currency: String,
     pub configuration_json: String,
+    pub status: TournamentStatus,
 }
 
 #[derive(sqlx::FromRow)]
@@ -77,6 +79,7 @@ struct TournamentConfigRow {
     pub sef_title: String,
     pub discipline: String,
     pub format: String,
+    pub status: TournamentStatus,
     pub configuration_json: String,
 }
 
@@ -122,6 +125,7 @@ impl TournamentsRepo {
                 ON r.tournament_id = t.id
                AND r.status NOT IN ('DELETED', 'DECLINED')
             WHERE t.deleted_at IS NULL
+              AND t.status != 'draft'
             GROUP BY
                 t.id,
                 t.title,
@@ -252,6 +256,7 @@ impl TournamentsRepo {
                 t.sef_title,
                 t.discipline,
                 t.format,
+                t.status,
                 tc.configuration_json
             FROM tournaments t
             INNER JOIN tournament_configuration tc
@@ -276,6 +281,7 @@ impl TournamentsRepo {
             sef_title: row.sef_title,
             discipline: row.discipline,
             format: row.format,
+            status: row.status,
             config,
         }))
     }
@@ -303,6 +309,7 @@ impl TournamentsRepo {
                 t.sef_title,
                 t.discipline,
                 t.format,
+                t.status,
                 tc.configuration_json
             FROM tournaments t
             INNER JOIN tournament_configuration tc
@@ -327,8 +334,57 @@ impl TournamentsRepo {
             sef_title: row.sef_title,
             discipline: row.discipline,
             format: row.format,
+            status: row.status,
             config,
         }))
+    }
+
+    pub async fn create(&self, title: &str, sef_title: &str) -> Result<i64, TournamentsRepoError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO tournaments (
+                title,
+                sef_title,
+                discipline,
+                format,
+                dates_json,
+                prize_pool_total_amount,
+                prize_pool_currency,
+                status
+            )
+            VALUES (?1, ?2, '', '', '[]', 0.0, '', 'draft')
+            "#,
+        )
+        .bind(title)
+        .bind(sef_title)
+        .execute(&mut *tx)
+        .await?;
+
+        let tournament_id: i64 = sqlx::query_scalar("SELECT last_insert_rowid()")
+            .fetch_one(&mut *tx)
+            .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO tournament_configuration (
+                tournament_id,
+                configuration_json,
+                created_at,
+                modified_at
+            )
+            VALUES (?1, ?2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            "#,
+        )
+        .bind(tournament_id)
+        .bind(r#"{"type":"","schedule":[],"prize_pool":{}}"#)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(tournament_id)
     }
 
     pub async fn update(
@@ -348,8 +404,9 @@ impl TournamentsRepo {
                 dates_json = ?5,
                 prize_pool_total_amount = ?6,
                 prize_pool_currency = ?7,
+                status = ?8,
                 modified_at = CURRENT_TIMESTAMP
-            WHERE id = ?8
+            WHERE id = ?9
             "#,
         )
         .bind(data.title)
@@ -359,6 +416,7 @@ impl TournamentsRepo {
         .bind(data.dates_json)
         .bind(data.prize_pool_total_amount)
         .bind(data.prize_pool_currency)
+        .bind(data.status)
         .bind(tournament_id)
         .execute(&mut *tx)
         .await?;
