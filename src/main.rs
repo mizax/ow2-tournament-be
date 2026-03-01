@@ -1,4 +1,4 @@
-use actix_web::{App, HttpServer, web};
+use actix_web::{App, HttpResponse, HttpServer, web};
 use ow2_tournament_be::api::auth::jwks::BNETJwksService;
 use ow2_tournament_be::api::auth::state_store::OAuthStateStore;
 use ow2_tournament_be::config::Config;
@@ -74,8 +74,20 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
     let job_scheduler = jobs::init_scheduler(db.clone());
 
     let http_server = HttpServer::new(move || {
+        let json_cfg = web::JsonConfig::default().error_handler(|err, _req| {
+            let message = err.to_string();
+            let response = HttpResponse::BadRequest()
+                .content_type(actix_web::http::header::ContentType::json())
+                .json(serde_json::json!({
+                    "error": "invalid_request",
+                    "details": message,
+                }));
+            actix_web::error::InternalError::from_response(err, response).into()
+        });
+
         let app = App::new()
             .wrap(actix_web::middleware::Logger::new(LOGGER_FORMAT))
+            .app_data(json_cfg)
             .app_data(web::Data::new(config.clone()))
             .app_data(web::Data::new(db.clone()))
             .app_data(storage.clone())
