@@ -47,6 +47,16 @@ pub mod kinds {
         action: "tournament.created",
         entity_type: "tournament",
     };
+
+    pub const TOURNAMENT_MANAGER_ADDED: AuditKind = AuditKind {
+        action: "tournament.manager_added",
+        entity_type: "tournament",
+    };
+
+    pub const TOURNAMENT_MANAGER_REMOVED: AuditKind = AuditKind {
+        action: "tournament.manager_removed",
+        entity_type: "tournament",
+    };
 }
 
 pub fn insert_change_if_changed(

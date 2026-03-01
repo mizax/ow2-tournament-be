@@ -118,7 +118,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(create_tournament)
             .service(get_managed_tournament)
             .service(update_tournament)
-            .service(list_tournament_matches),
+            .service(list_tournament_matches)
+            .configure(super::tournament_managers::configure_nested),
     );
 }
 
@@ -179,11 +180,11 @@ pub async fn create_tournament(
         .map_err(map_tournament_repo_error)?;
 
     db.tournament_managers
-        .add_manager(tournament_id, user_id)
+        .add_manager_as_owner(tournament_id, user_id)
         .await
         .map_err(|e| {
             log::error!(
-                "Failed to add user {} as manager for tournament {}: {}",
+                "Failed to add user {} as owner manager for tournament {}: {}",
                 user_id,
                 tournament_id,
                 e

@@ -173,7 +173,7 @@ impl UsersRepo {
         Ok(())
     }
 
-    pub async fn upsert_battletag(&self, user_id: i64, battletag: &str) -> Result<(), sqlx::Error> {
+    pub async fn upsert_battletag(&self, user_id: i64, battletag: &str) -> Result<bool, sqlx::Error> {
         self.upsert_battletag_with_executor(&self.pool, user_id, battletag)
             .await
     }
@@ -183,11 +183,11 @@ impl UsersRepo {
         executor: E,
         user_id: i64,
         battletag: &str,
-    ) -> Result<(), sqlx::Error>
+    ) -> Result<bool, sqlx::Error>
     where
         E: Executor<'e, Database = Sqlite>,
     {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             INSERT OR IGNORE INTO user_battletags (user_id, battletag)
             VALUES (?1, ?2)
@@ -198,7 +198,7 @@ impl UsersRepo {
         .execute(executor)
         .await?;
 
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     pub async fn find_battletag_id(

@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use actix_web::http::StatusCode;
+use log::error;
 use actix_web::http::header::ContentType;
 use actix_web::{HttpResponse, error};
 use thiserror::Error as ThisError;
@@ -73,10 +74,9 @@ impl error::ResponseError for ApiError {
 
 impl From<AppError> for ApiError {
     fn from(value: AppError) -> Self {
-        match value {
-            _ => ApiError::InternalError {
-                error: "Internal error".to_string(),
-            },
+        error!("AppError: {:?}", value);
+        ApiError::InternalError {
+            error: "Internal error".to_string(),
         }
     }
 }

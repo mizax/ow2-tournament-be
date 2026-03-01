@@ -1,3 +1,4 @@
+use crate::api::auth::jwt::AuthenticatedUser;
 use crate::api::error::ApiError;
 use crate::dal::Dal;
 use crate::logs_parser::{events_parser, saver};
@@ -10,8 +11,14 @@ async fn load_log(
     path: web::Path<(i64, String)>,
     body: web::Bytes,
     db: web::Data<Arc<Dal>>,
+    user: AuthenticatedUser,
 ) -> Result<impl Responder, ApiError> {
     let (match_id, log_name) = path.into_inner();
+
+    let user_id = user.id.parse::<i64>().map_err(|_| ApiError::BadRequest {
+        error: "Invalid user id".to_string(),
+        details: "User id from auth token is not a number.".to_string(),
+    })?;
 
     let match_row = db
         .matches
@@ -21,6 +28,26 @@ async fn load_log(
             error: e.to_string(),
         })?
         .ok_or(ApiError::NotFound)?;
+
+    if !user.is_admin() {
+        let is_manager = db
+            .tournament_managers
+            .user_is_manager_for_tournament(match_row.tournament_id, user_id)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to check manager permissions for user {} in tournament {}: {}",
+                    user_id, match_row.tournament_id, e
+                );
+                ApiError::InternalError {
+                    error: e.to_string(),
+                }
+            })?;
+
+        if !is_manager {
+            return Err(ApiError::Forbidden);
+        }
+    }
 
     let csv = String::from_utf8(body.to_vec()).map_err(|e| ApiError::BadRequest {
         error: "logs.invalid_encoding".to_string(),

@@ -1,4 +1,5 @@
 use crate::api::auth::jwks::BNETJwksService;
+use crate::config::Config;
 use crate::dal::Dal;
 use actix_web::{
     Error, FromRequest, HttpRequest,
@@ -10,6 +11,7 @@ use actix_web::{
 use jsonwebtoken::{Algorithm, Validation, decode, decode_header};
 use log::error;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -50,6 +52,7 @@ impl AuthenticatedUser {
 pub async fn validate_token(
     token: &str,
     jwks_service: &BNETJwksService,
+    client_id: &str,
 ) -> Result<Claims, Box<dyn std::error::Error + Send + Sync>> {
     let header = decode_header(token)?;
     let kid = header.kid.ok_or("No kid found in token header")?;
@@ -57,9 +60,7 @@ pub async fn validate_token(
     let decoding_key = jwks_service.get_decoding_key(&kid).await?;
 
     let mut validation = Validation::new(Algorithm::RS256);
-    validation.set_audience(&[""]); // BattleNet might need client_id here if it's in the 'aud' claim
-    // Disable audience check if we don't know the client_id yet or if it's not present in OIDC id_token from BNet in a way we want to strictly enforce here without config
-    validation.validate_aud = false;
+    validation.set_audience(&[client_id]);
 
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
 
@@ -80,6 +81,13 @@ impl FromRequest for AuthenticatedUser {
                     ErrorUnauthorized("Authentication service unavailable")
                 })?;
 
+            let config = req
+                .app_data::<web::Data<Arc<Config>>>()
+                .ok_or_else(|| {
+                    error!("Config not found in app data");
+                    ErrorUnauthorized("Authentication service unavailable")
+                })?;
+
             let db = req
                 .app_data::<web::Data<std::sync::Arc<Dal>>>()
                 .ok_or_else(|| {
@@ -89,10 +97,12 @@ impl FromRequest for AuthenticatedUser {
 
             let token = extract_token_from_auth_header(req.headers()).map_err(ErrorUnauthorized)?;
 
-            let claims = validate_token(&token, jwks_service).await.map_err(|e| {
-                error!("Token validation failed: {:?}", e);
-                ErrorUnauthorized("Invalid token")
-            })?;
+            let claims = validate_token(&token, jwks_service, &config.battlenet.client_id)
+                .await
+                .map_err(|e| {
+                    error!("Token validation failed: {:?}", e);
+                    ErrorUnauthorized("Invalid token")
+                })?;
 
             let user_id = claims
                 .sub

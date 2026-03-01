@@ -119,6 +119,7 @@ async fn auth_battlenet_callback_missing_state_returns_400() {
             .app_data(web::Data::new(Arc::new(config)))
             .app_data(web::Data::new(state_store))
             .app_data(web::Data::new(Arc::new(dal)))
+            .app_data(web::Data::new(reqwest::Client::new()))
             .configure(api::configure),
     )
     .await;
@@ -143,6 +144,7 @@ async fn auth_battlenet_callback_error_returns_400() {
             .app_data(web::Data::new(Arc::new(config)))
             .app_data(web::Data::new(state_store))
             .app_data(web::Data::new(Arc::new(dal)))
+            .app_data(web::Data::new(reqwest::Client::new()))
             .configure(api::configure),
     )
     .await;
@@ -195,6 +197,7 @@ async fn auth_battlenet_callback_success_creates_user() {
             .app_data(web::Data::new(Arc::new(config)))
             .app_data(web::Data::new(state_store))
             .app_data(web::Data::new(Arc::new(dal)))
+            .app_data(web::Data::new(reqwest::Client::new()))
             .configure(api::configure),
     )
     .await;
@@ -228,6 +231,7 @@ async fn auth_battlenet_callback_invalid_state_returns_400() {
             .app_data(web::Data::new(Arc::new(config)))
             .app_data(web::Data::new(state_store))
             .app_data(web::Data::new(Arc::new(dal)))
+            .app_data(web::Data::new(reqwest::Client::new()))
             .configure(api::configure),
     )
     .await;

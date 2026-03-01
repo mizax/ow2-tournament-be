@@ -42,6 +42,7 @@ pub use registrations::SortDirection;
 pub use teams::TeamRow;
 pub use teams::TeamsRepo;
 pub use tournament_managers::ManagedTournamentRow;
+pub use tournament_managers::TournamentManagerRow;
 pub use tournament_managers::TournamentManagersRepo;
 pub use tournaments::TournamentDetailsData;
 pub use tournaments::TournamentShortData;

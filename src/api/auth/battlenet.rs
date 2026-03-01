@@ -50,20 +50,7 @@ pub struct CallbackQuery {
     pub error_description: Option<String>,
 }
 
-#[get("/battlenet")]
-pub async fn auth(
-    req: actix_web::HttpRequest,
-    config: web::Data<Arc<Config>>,
-    state_store: web::Data<OAuthStateStore>,
-) -> Result<impl Responder> {
-    let state: String = rand::rng()
-        .sample_iter(&rand::distr::Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect();
-
-    state_store.add_state(state.clone());
-
+fn resolve_redirect_uri(req: &actix_web::HttpRequest, config: &Config) -> String {
     let host = req
         .headers()
         .get("host")
@@ -82,7 +69,24 @@ pub async fn auth(
         &config.app.main_host
     };
 
-    let redirect_uri = format!("{}{}", base_redirect_host, config.battlenet.redirect_uri);
+    format!("{}{}", base_redirect_host, config.battlenet.redirect_uri)
+}
+
+#[get("/battlenet")]
+pub async fn auth(
+    req: actix_web::HttpRequest,
+    config: web::Data<Arc<Config>>,
+    state_store: web::Data<OAuthStateStore>,
+) -> Result<impl Responder> {
+    let state: String = rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+
+    state_store.add_state(state.clone());
+
+    let redirect_uri = resolve_redirect_uri(&req, &config);
 
     let mut params = HashMap::new();
     params.insert("client_id", config.battlenet.client_id.clone());
@@ -111,6 +115,7 @@ pub async fn callback(
     config: web::Data<Arc<Config>>,
     state_store: web::Data<OAuthStateStore>,
     db: web::Data<Arc<Dal>>,
+    http_client: web::Data<reqwest::Client>,
 ) -> Result<impl Responder> {
     if let Some(error) = &query.error {
         return Err(ApiError::BadRequest {
@@ -138,27 +143,7 @@ pub async fn callback(
         details: "Authorization code is required".to_string(),
     })?;
 
-    let host = req
-        .headers()
-        .get("host")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-
-    let base_redirect_host = if host
-        == config
-            .app
-            .alt_host
-            .replace("http://", "")
-            .replace("https://", "")
-    {
-        &config.app.alt_host
-    } else {
-        &config.app.main_host
-    };
-
-    let redirect_uri = format!("{}{}", base_redirect_host, config.battlenet.redirect_uri);
-
-    let client = reqwest::Client::new();
+    let redirect_uri = resolve_redirect_uri(&req, &config);
 
     let token_url = config
         .battlenet
@@ -172,7 +157,7 @@ pub async fn callback(
         .as_deref()
         .unwrap_or(BATTLE_NET_USERINFO_URL);
 
-    let token_response = client
+    let token_response = http_client
         .post(token_url)
         .basic_auth(
             &config.battlenet.client_id,
@@ -205,7 +190,7 @@ pub async fn callback(
                 error: format!("Failed to parse token response: {}", e),
             })?;
 
-    let userinfo_response = client
+    let userinfo_response = http_client
         .get(userinfo_url)
         .bearer_auth(&tokens.access_token)
         .send()
@@ -251,20 +236,12 @@ pub async fn callback(
                         .insert_battletag_with_executor(&mut *conn, user_id, &bnet_user.battletag)
                         .await?;
                 } else {
-                    let battletag_exists = dal
+                    let inserted = dal
                         .users
-                        .battletag_exists_with_executor(&mut *conn, user_id, &bnet_user.battletag)
+                        .upsert_battletag_with_executor(&mut *conn, user_id, &bnet_user.battletag)
                         .await?;
 
-                    if !battletag_exists {
-                        dal.users
-                            .insert_battletag_with_executor(
-                                &mut *conn,
-                                user_id,
-                                &bnet_user.battletag,
-                            )
-                            .await?;
-
+                    if inserted {
                         dal.users
                             .touch_updated_at_with_executor(&mut *conn, user_id)
                             .await?;

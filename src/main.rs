@@ -73,6 +73,8 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
 
     let job_scheduler = jobs::init_scheduler(db.clone());
 
+    let http_client = web::Data::new(reqwest::Client::new());
+
     let http_server = HttpServer::new(move || {
         let json_cfg = web::JsonConfig::default().error_handler(|err, _req| {
             let message = err.to_string();
@@ -93,7 +95,8 @@ async fn async_main(conf: &Config) -> std::io::Result<()> {
             .app_data(storage.clone())
             .app_data(state_store.clone())
             .app_data(jwks_service.clone())
-            .app_data(geo_ip_service.clone());
+            .app_data(geo_ip_service.clone())
+            .app_data(http_client.clone());
 
         let app = match (
             twitch_api_service.as_ref(),
