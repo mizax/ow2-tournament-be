@@ -59,6 +59,7 @@ pub async fn get_tournament(
 
     let tournament = Tournament {
         id: row.sef_title,
+        numeric_id: row.id,
         title: row.title,
         discipline: row.discipline,
         format: row.format,

@@ -119,7 +119,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(get_managed_tournament)
             .service(update_tournament)
             .service(list_tournament_matches)
-            .configure(super::tournament_managers::configure_nested),
+            .configure(super::tournament_managers::configure_nested)
+            .configure(super::roster::configure_nested)
+            .configure(super::checkins::configure_nested)
+            .configure(super::balances::configure_nested),
     );
 }
 

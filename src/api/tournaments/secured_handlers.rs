@@ -3,7 +3,7 @@ use crate::api::error::ApiError;
 use crate::dal::{Dal, NewRegistration, RegistrationStatus, RoleValue};
 use actix_web::http::header::USER_AGENT;
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -261,4 +261,163 @@ pub async fn registration_status(
     };
 
     Ok(HttpResponse::Ok().json(response))
+}
+
+#[post("/{tournament_id}/checkin")]
+pub async fn self_checkin(
+    user: AuthenticatedUser,
+    db: web::Data<Arc<Dal>>,
+    tournament_id: web::Path<i64>,
+) -> actix_web::Result<impl Responder, ApiError> {
+    let user_id = user.id.parse::<i64>().map_err(|_| ApiError::BadRequest {
+        error: "Invalid user id".to_string(),
+        details: "User id from auth token is not a number.".to_string(),
+    })?;
+    let tournament_id = tournament_id.into_inner();
+
+    let tournament = db
+        .tournaments
+        .get_by_id(tournament_id)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to load tournament {}: {}", tournament_id, e);
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?
+        .ok_or(ApiError::NotFound)?;
+
+    // Validate check-in window
+    if let Some(registration) = tournament.config.registration.as_ref() {
+        if let Some(checkin) = registration.checkin.as_ref() {
+            let now = Utc::now();
+            if let Some(from_str) = &checkin.from {
+                if let Ok(from) = from_str.parse::<DateTime<Utc>>() {
+                    if now < from {
+                        return Err(ApiError::BadRequest {
+                            error: "checkin_not_started".to_string(),
+                            details: "Check-in window has not started yet.".to_string(),
+                        });
+                    }
+                }
+            }
+            if let Some(to_str) = &checkin.to {
+                if let Ok(to) = to_str.parse::<DateTime<Utc>>() {
+                    if now > to {
+                        return Err(ApiError::BadRequest {
+                            error: "checkin_closed".to_string(),
+                            details: "Check-in window has already closed.".to_string(),
+                        });
+                    }
+                }
+            }
+        } else {
+            return Err(ApiError::BadRequest {
+                error: "checkin_not_configured".to_string(),
+                details: "Check-in is not configured for this tournament.".to_string(),
+            });
+        }
+    } else {
+        return Err(ApiError::BadRequest {
+            error: "checkin_not_configured".to_string(),
+            details: "Check-in is not configured for this tournament.".to_string(),
+        });
+    }
+
+    // Find the user's accepted registration
+    let registration = db
+        .registrations
+        .find_user_registration(user_id, tournament_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to find registration for user {} in tournament {}: {}",
+                user_id,
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?
+        .ok_or(ApiError::NotFound)?;
+
+    if registration.status != RegistrationStatus::Accepted {
+        return Err(ApiError::BadRequest {
+            error: "registration_not_accepted".to_string(),
+            details: "Only accepted registrations can check in.".to_string(),
+        });
+    }
+
+    let checkin = db
+        .checkins
+        .self_checkin(tournament_id, registration.id, user_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to self-checkin user {} in tournament {}: {}",
+                user_id,
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?;
+
+    Ok(HttpResponse::Ok().json(checkin))
+}
+
+#[get("/{tournament_id}/checkin")]
+pub async fn get_self_checkin(
+    user: AuthenticatedUser,
+    db: web::Data<Arc<Dal>>,
+    tournament_id: web::Path<i64>,
+) -> actix_web::Result<impl Responder, ApiError> {
+    let user_id = user.id.parse::<i64>().map_err(|_| ApiError::BadRequest {
+        error: "Invalid user id".to_string(),
+        details: "User id from auth token is not a number.".to_string(),
+    })?;
+    let tournament_id = tournament_id.into_inner();
+
+    let registration = db
+        .registrations
+        .find_user_registration(user_id, tournament_id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to find registration for user {} in tournament {}: {}",
+                user_id,
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?
+        .ok_or(ApiError::NotFound)?;
+
+    let checkin = db
+        .checkins
+        .get(tournament_id, registration.id)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "Failed to get checkin for registration {} in tournament {}: {}",
+                registration.id,
+                tournament_id,
+                e
+            );
+            ApiError::InternalError {
+                error: e.to_string(),
+            }
+        })?;
+
+    match checkin {
+        Some(c) => Ok(HttpResponse::Ok().json(c)),
+        None => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "checked_in": false,
+            "checked_in_at": null
+        }))),
+    }
 }

@@ -1,4 +1,6 @@
 pub mod audit;
+pub mod balances;
+pub mod checkins;
 pub mod dal;
 pub mod heroes;
 pub mod match_events;
@@ -13,6 +15,12 @@ pub mod tournaments;
 pub mod users;
 
 pub use audit::AuditDal;
+pub use balances::BalanceMeta;
+pub use balances::BalanceRow;
+pub use balances::BalancesRepo;
+pub use checkins::CheckinRow;
+pub use checkins::CheckinUpsert;
+pub use checkins::CheckinsRepo;
 pub use audit::AuditEntry;
 pub use audit::AuditFilter;
 pub use audit::AuditLogRow;

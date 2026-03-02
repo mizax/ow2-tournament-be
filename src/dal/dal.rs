@@ -13,14 +13,17 @@ pub struct Dal {
     pub tournaments: TournamentsRepo,
     pub registrations: RegistrationsRepo,
     pub tournament_managers: TournamentManagersRepo,
+    pub checkins: CheckinsRepo,
+    pub balances: BalancesRepo,
 }
 
 use futures_util::future::BoxFuture;
 use sqlx::{Pool, Sqlite, SqlitePool};
 
 use crate::dal::{
-    AuditDal, HeroesRepo, MatchEventsRepo, MatchMapsRepo, MatchPlayerStatisticsRepo, MatchesRepo,
-    PlayersRepo, RegistrationsRepo, TeamsRepo, TournamentManagersRepo, TournamentsRepo, UsersRepo,
+    AuditDal, BalancesRepo, CheckinsRepo, HeroesRepo, MatchEventsRepo, MatchMapsRepo,
+    MatchPlayerStatisticsRepo, MatchesRepo, PlayersRepo, RegistrationsRepo, TeamsRepo,
+    TournamentManagersRepo, TournamentsRepo, UsersRepo,
 };
 
 impl Dal {
@@ -48,6 +51,8 @@ impl Dal {
             tournaments: TournamentsRepo::new(db_pool.clone()),
             registrations: RegistrationsRepo::new(db_pool.clone()),
             tournament_managers: TournamentManagersRepo::new(db_pool.clone()),
+            checkins: CheckinsRepo::new(db_pool.clone()),
+            balances: BalancesRepo::new(db_pool.clone()),
             db_pool,
         }
     }
@@ -66,6 +71,8 @@ impl Dal {
             tournaments: TournamentsRepo::new(db_pool.clone()),
             registrations: RegistrationsRepo::new(db_pool.clone()),
             tournament_managers: TournamentManagersRepo::new(db_pool.clone()),
+            checkins: CheckinsRepo::new(db_pool.clone()),
+            balances: BalancesRepo::new(db_pool.clone()),
             db_pool,
         }
     }

@@ -1,6 +1,9 @@
 use actix_web::web;
 
+mod balances;
+mod checkins;
 mod registrations;
+mod roster;
 mod tournament_managers;
 mod tournaments;
 mod users;

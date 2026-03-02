@@ -18,6 +18,8 @@ pub fn configure_private(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/tournaments")
             .service(secured_handlers::register)
-            .service(secured_handlers::registration_status),
+            .service(secured_handlers::registration_status)
+            .service(secured_handlers::self_checkin)
+            .service(secured_handlers::get_self_checkin),
     );
 }

@@ -166,6 +166,7 @@ pub struct Markdown {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Tournament {
     pub id: String,
+    pub numeric_id: i64,
     pub title: String,
     pub discipline: String,
     pub format: String,
