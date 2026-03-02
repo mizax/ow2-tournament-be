@@ -48,9 +48,9 @@ pub struct Eligibility {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Checkin {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub from: Option<String>,
+    pub from: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub to: Option<String>,
+    pub to: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

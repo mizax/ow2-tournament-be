@@ -3,7 +3,7 @@ use crate::api::error::ApiError;
 use crate::dal::{Dal, NewRegistration, RegistrationStatus, RoleValue};
 use actix_web::http::header::USER_AGENT;
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -291,24 +291,20 @@ pub async fn self_checkin(
     if let Some(registration) = tournament.config.registration.as_ref() {
         if let Some(checkin) = registration.checkin.as_ref() {
             let now = Utc::now();
-            if let Some(from_str) = &checkin.from {
-                if let Ok(from) = from_str.parse::<DateTime<Utc>>() {
-                    if now < from {
-                        return Err(ApiError::BadRequest {
-                            error: "checkin_not_started".to_string(),
-                            details: "Check-in window has not started yet.".to_string(),
-                        });
-                    }
+            if let Some(from) = checkin.from {
+                if now < from {
+                    return Err(ApiError::BadRequest {
+                        error: "checkin_not_started".to_string(),
+                        details: "Check-in window has not started yet.".to_string(),
+                    });
                 }
             }
-            if let Some(to_str) = &checkin.to {
-                if let Ok(to) = to_str.parse::<DateTime<Utc>>() {
-                    if now > to {
-                        return Err(ApiError::BadRequest {
-                            error: "checkin_closed".to_string(),
-                            details: "Check-in window has already closed.".to_string(),
-                        });
-                    }
+            if let Some(to) = checkin.to {
+                if now > to {
+                    return Err(ApiError::BadRequest {
+                        error: "checkin_closed".to_string(),
+                        details: "Check-in window has already closed.".to_string(),
+                    });
                 }
             }
         } else {
